@@ -1,8 +1,11 @@
 from datetime import date
 from unittest.mock import Mock
+import time
 
 import pandas as pd
+import pytest
 
+from climate.api import WeatherError
 from climate.service import load_current, load_history
 
 
@@ -59,3 +62,20 @@ def test_current_cache_validates_values_preserves_raw_and_refreshes(tmp_path, mo
     current_table = next(pd.read_parquet(path) for path in raw_files if "temperature_2m" in pd.read_parquet(path))
     assert current_table.temperature_2m.iloc[0] == 200
     assert len(list((tmp_path / "data/processed/current").glob("*.parquet"))) == 2
+
+
+def test_expired_current_cache_refetches_and_never_masks_network_failure(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    forecast = pd.DataFrame({"date": pd.to_datetime(["2025-01-01"]).tz_localize("Asia/Kolkata"),
+                             "city": "Delhi", "tmax": [32.], "tmin": [22.], "tmean": [27.], "source": "TEST"})
+    source = Mock(cache_id="expiring-current")
+    source.current.return_value = ({"time": "2025-01-01T12:00", "temperature_2m": 30,
+                                    "relative_humidity_2m": 50, "source": "TEST"}, forecast)
+    load_current("Delhi", source=source)
+    later = time.time() + 901
+    monkeypatch.setattr("climate.cache.time.time", lambda: later)
+    load_current("Delhi", source=source)
+    assert source.current.call_count == 2
+    source.current.side_effect = WeatherError("offline")
+    with pytest.raises(WeatherError, match="offline"):
+        load_current("Delhi", source=source)

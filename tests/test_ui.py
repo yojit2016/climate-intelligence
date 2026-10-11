@@ -77,3 +77,30 @@ def test_dashboard_explains_insufficient_history_without_predictions():
         assert not app.exception
         assert any("Local ML predictions unavailable" in info.value for info in app.info)
         assert not any("Held-out model evaluation" in header.value for header in app.subheader)
+
+
+def test_refresh_bypasses_download_caches_and_retrains():
+    with patch("climate.ui.cached_history", side_effect=history) as historical_loader, \
+         patch("climate.ui.live_weather", side_effect=current) as current_loader, \
+         patch("climate.ui.cached_acquisition", side_effect=acquired) as acquisition_loader, \
+         patch("climate.forecast_panel.cached_model.clear") as clear_models:
+        app = AppTest.from_file(APP, default_timeout=60).run()
+        assert not app.exception
+        next(button for button in app.button if button.label == "Refresh weather data").click().run()
+        assert not app.exception
+        assert any(call.kwargs.get("force_refresh") for call in historical_loader.call_args_list)
+        assert current_loader.call_args.kwargs["force_refresh"]
+        assert acquisition_loader.call_args.kwargs["force_refresh"]
+        clear_models.assert_called_once()
+
+
+def test_chart_filters_do_not_shorten_automatic_training_history():
+    def short_history(city, start, end, **kwargs):
+        return history(city, end - timedelta(days=30), end)
+    with patch("climate.ui.cached_history", side_effect=short_history), \
+         patch("climate.ui.live_weather", side_effect=current), \
+         patch("climate.ui.cached_acquisition", side_effect=acquired) as acquisition_loader:
+        app = AppTest.from_file(APP, default_timeout=60).run()
+        assert not app.exception
+        assert any("Held-out model evaluation" in header.value for header in app.subheader)
+        assert acquisition_loader.call_args.args == (local_today(CITIES["Delhi"]),)
