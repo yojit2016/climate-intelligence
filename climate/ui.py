@@ -9,6 +9,7 @@ import streamlit as st
 from climate.analytics import summary
 from climate.api import WeatherClient, WeatherError
 from climate.forecast_panel import forecast_panel
+from climate.export import csv_bytes
 from climate.locations import CITIES
 from climate.panels import patterns_panel, regional_panel, trends_panel
 from climate.service import load_history
@@ -110,3 +111,9 @@ def render():
         forecast_panel(frame, provider_forecast)
     with data:
         st.dataframe(frame, use_container_width=True, hide_index=True)
+        left, right = st.columns(2)
+        filename = f"{city.lower()}_{start}_{end}"
+        left.download_button("Download processed CSV", csv_bytes(frame), f"{filename}_processed.csv", "text/csv")
+        right.download_button("Download raw API table CSV", csv_bytes(raw), f"{filename}_raw.csv", "text/csv")
+        st.caption("Exports retain source labels and timezone offsets. Raw tables preserve API nulls and precede quality controls; missing processed values remain blank.")
+    st.caption("Weather data: [Open-Meteo](https://open-meteo.com/) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) · Analytics and forecasts are exploratory.")
