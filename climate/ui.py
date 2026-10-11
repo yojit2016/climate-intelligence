@@ -50,7 +50,7 @@ def filters():
             smoothing = st.checkbox("Show signal smoothing", value=True)
             window = st.select_slider("Smoothing window (days)", options=[5, 7, 11, 15], value=7)
             comparison = st.multiselect("Comparison cities", list(CITIES), default=["Mumbai", "Pune"])
-            st.form_submit_button("Apply filters", type="primary", use_container_width=True)
+            st.form_submit_button("Apply filters", type="primary", width="stretch")
         st.caption("Thresholds support exploration and are not official heatwave warnings.")
     if not isinstance(dates, (tuple, list)) or len(dates) != 2:
         st.info("Select both the beginning and end of the historical range.")
@@ -100,7 +100,7 @@ def render():
     st.caption(f"{stats['valid_days']} valid daily maxima · {stats['missing_days']} missing daily maxima")
     with st.expander("Data quality and provenance"):
         st.json(report)
-        st.dataframe(frame.groupby("source").size().rename("Days"), use_container_width=True)
+        st.dataframe(frame.groupby("source").size().rename("Days"), width="stretch")
         st.caption("Raw API tables and processed tables are cached independently under data/. Requests expire after 6 hours; current estimates expire after 15 minutes.")
     trends, patterns, regions, prediction, data = st.tabs(["Temperature trends", "Monthly & seasonal", "Regional comparison", "ML predictions", "Data"])
     with trends:
@@ -112,7 +112,7 @@ def render():
     with prediction:
         forecast_panel(frame, provider_forecast)
     with data:
-        st.dataframe(frame, use_container_width=True, hide_index=True)
+        st.dataframe(frame, width="stretch", hide_index=True)
         left, right = st.columns(2)
         filename = f"{city.lower()}_{start}_{end}"
         left.download_button("Download processed CSV", csv_bytes(frame), f"{filename}_processed.csv", "text/csv")

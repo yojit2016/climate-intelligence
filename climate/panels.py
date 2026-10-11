@@ -9,21 +9,21 @@ from climate.smoothing import smooth_temperature
 
 
 def trends_panel(frame: pd.DataFrame, threshold: float, smoothing: bool, window: int):
-    st.plotly_chart(trend_chart(daily_trends(frame, threshold), threshold), use_container_width=True)
-    st.plotly_chart(range_chart(frame), use_container_width=True)
+    st.plotly_chart(trend_chart(daily_trends(frame, threshold), threshold), width="stretch")
+    st.plotly_chart(range_chart(frame), width="stretch")
     if smoothing:
         filtered = frame.copy()
         filtered["smoothed"] = smooth_temperature(filtered, window)
-        st.plotly_chart(smoothing_chart(filtered), use_container_width=True)
+        st.plotly_chart(smoothing_chart(filtered), width="stretch")
         st.caption(f"Centred Savitzky–Golay filter, {window}-day window, polynomial order 2. Descriptive only; not used for ML. Gaps and short runs remain blank.")
 
 
 def patterns_panel(frame: pd.DataFrame):
     monthly, seasonal = monthly_patterns(frame), seasonal_patterns(frame)
-    st.plotly_chart(pattern_chart(monthly, "month", "Monthly temperature patterns"), use_container_width=True)
-    st.plotly_chart(pattern_chart(seasonal, "season", "Seasonal temperature patterns"), use_container_width=True)
+    st.plotly_chart(pattern_chart(monthly, "month", "Monthly temperature patterns"), width="stretch")
+    st.plotly_chart(pattern_chart(seasonal, "season", "Seasonal temperature patterns"), width="stretch")
     st.caption("Winter: Dec–Feb · Pre-monsoon: Mar–May · Monsoon: Jun–Sep · Post-monsoon: Oct–Nov. Averages cover only selected dates; partial seasons are not climatological normals.")
-    st.dataframe(seasonal, hide_index=True, use_container_width=True)
+    st.dataframe(seasonal, hide_index=True, width="stretch")
 
 
 def regional_panel(frame: pd.DataFrame, cities: list[str], start, end, threshold: float, loader):
@@ -41,6 +41,6 @@ def regional_panel(frame: pd.DataFrame, cities: list[str], start, end, threshold
             except (WeatherError, ValueError, OSError) as exc:
                 st.warning(f"{name} unavailable: {exc}")
     combined = pd.concat(parts, ignore_index=True)
-    st.plotly_chart(comparison_chart(combined), use_container_width=True)
-    st.dataframe(regional_summary(combined, threshold), hide_index=True, use_container_width=True)
+    st.plotly_chart(comparison_chart(combined), width="stretch")
+    st.dataframe(regional_summary(combined, threshold), hide_index=True, width="stretch")
     st.caption("Each city uses the same requested dates. Valid-day counts reveal differences in available data; means use available values.")
