@@ -20,3 +20,25 @@ def daily_trends(frame: pd.DataFrame, threshold: float) -> pd.DataFrame:
 def regional_summary(frame: pd.DataFrame, threshold: float) -> pd.DataFrame:
     return pd.DataFrame([{"city": city, **summary(group, threshold)}
                          for city, group in frame.groupby("city")])
+
+
+SEASONS = {12: "Winter", 1: "Winter", 2: "Winter", 3: "Pre-monsoon", 4: "Pre-monsoon",
+           5: "Pre-monsoon", 6: "Monsoon", 7: "Monsoon", 8: "Monsoon", 9: "Monsoon",
+           10: "Post-monsoon", 11: "Post-monsoon"}
+
+
+def monthly_patterns(frame: pd.DataFrame) -> pd.DataFrame:
+    result = frame.copy()
+    result["month"] = result["date"].dt.strftime("%Y-%m")
+    return result.groupby("month", sort=True).agg(
+        mean_max=("tmax", "mean"), highest=("tmax", "max"), mean_min=("tmin", "mean"),
+        valid_days=("tmax", "count")).reset_index()
+
+
+def seasonal_patterns(frame: pd.DataFrame) -> pd.DataFrame:
+    result = frame.copy()
+    result["season"] = result["date"].dt.month.map(SEASONS)
+    grouped = result.groupby("season").agg(mean_max=("tmax", "mean"),
+        mean_min=("tmin", "mean"), highest=("tmax", "max"), valid_days=("tmax", "count"))
+    return grouped.reindex(["Winter", "Pre-monsoon", "Monsoon", "Post-monsoon"]).dropna(
+        subset=["valid_days"]).reset_index()
