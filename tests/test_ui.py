@@ -112,7 +112,7 @@ def test_chart_filters_do_not_shorten_automatic_training_history():
 
 
 def test_history_views_keep_patterns_comparisons_smoothing_and_processing_accessible():
-    with patch("climate.ui.cached_history", side_effect=history), \
+    with patch("climate.ui.cached_history", side_effect=history) as loader, \
          patch("climate.ui.live_weather", side_effect=current), \
          patch("climate.ui.automatic_training"):
         app = AppTest.from_file(APP, default_timeout=30).run()
@@ -131,6 +131,12 @@ def test_history_views_keep_patterns_comparisons_smoothing_and_processing_access
         assert any("smoothed daily maximum" in item.value for item in app.markdown)
         assert any("Detailed processing report" in item.label for item in app.expander)
         assert any("Download raw API table CSV" == item.label for item in app.get("download_button"))
+        # Refresh while comparisons are hidden, then visit them: requests still bypass disk.
+        next(item for item in app.button if item.label == "Refresh weather data").click().run()
+        assert not app.exception
+        next(item for item in app.radio if item.label == "Explore history").set_value("Across cities").run()
+        assert not app.exception
+        assert all(call.kwargs["force_refresh"] for call in loader.call_args_list[-2:])
 
 
 def test_missing_temperatures_do_not_imply_zero_exceedances_or_a_conclusion():

@@ -40,6 +40,7 @@ def refresh_weather():
     st.session_state["refresh_current"] = True
     st.session_state["refresh_training"] = True
     st.session_state["refresh_history"] = True
+    st.session_state["refresh_chart_cities"] = list(CITIES)
 
 
 def display_value(value, suffix: str = " °C") -> str:
@@ -138,9 +139,13 @@ def render():
         st.subheader("What is happening with temperatures?")
         current_cards(city)
     refresh_history = st.session_state.pop("refresh_history", False)
+    pending_refresh = st.session_state.get("refresh_chart_cities", [])
     try:
         with st.spinner("Loading historical weather…"):
-            raw, frame, report = cached_history(city, start, end, force_refresh=refresh_history)
+            raw, frame, report = cached_history(city, start, end, force_refresh=refresh_history or city in pending_refresh)
+        if city in pending_refresh:
+            pending_refresh.remove(city)
+            st.session_state["refresh_chart_cities"] = pending_refresh
     except (WeatherError, ValueError, OSError) as exc:
         LOGGER.exception("History unavailable")
         with overview:
@@ -175,7 +180,11 @@ def render():
             patterns_panel(frame)
         else:
             def comparison_history(name, first, last):
-                return cached_history(name, first, last, force_refresh=refresh_history)
+                result = cached_history(name, first, last, force_refresh=refresh_history or name in pending_refresh)
+                if name in pending_refresh:
+                    pending_refresh.remove(name)
+                    st.session_state["refresh_chart_cities"] = pending_refresh
+                return result
             regional_panel(frame, comparison, start, end, threshold, comparison_history)
     with prediction:
         automatic_training(city)
