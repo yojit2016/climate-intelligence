@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from climate.processing import clean_daily
-from climate.storytelling import baseline_comparison, group_observation, peak_observation, point_processing_summary, imd_processing_summary
+from climate.storytelling import baseline_comparison, group_observation, peak_observation, point_processing_summary, imd_processing_summary, prediction_observation
 
 
 def test_observations_use_available_values_and_handle_empty_groups():
@@ -38,6 +38,8 @@ def test_processing_summary_does_not_label_invalid_events_as_invalid_rows():
     assert result["Valid maximum-temperature records"] == 1
     assert result["Missing maximum-temperature values"] == 2
     assert result["Source dataset"] == "Test source"
+    assert "filter off" in result["Smoothing"]
+    assert "11-day" in point_processing_summary(raw, frame, report, smoothing=True, window=11)["Smoothing"]
 
 
 def test_imd_summary_counts_cell_days_and_labels_source_interpolation():
@@ -46,3 +48,12 @@ def test_imd_summary_counts_cell_days_and_labels_source_interpolation():
         "start": "2025-01-01", "end": "2025-12-31"})
     assert result["Records acquired (grid cell-days)"] == 350765
     assert "IMD source product" in result["Interpolation by this application"]
+
+
+def test_prediction_observation_reports_real_dates_and_does_not_claim_observation():
+    predictions = pd.DataFrame({"date": pd.date_range("2026-01-01", periods=3),
+                                "prediction": [30., 32.5, np.nan]})
+    text = prediction_observation(predictions)
+    assert "30.00–32.50°C" in text and "02 Jan 2026" in text
+    assert "2 prediction dates" in text and "not measured" in text
+    assert "No model predictions" in prediction_observation(predictions.assign(prediction=np.nan))

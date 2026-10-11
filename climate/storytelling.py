@@ -18,7 +18,7 @@ def sources(frame: pd.DataFrame) -> str:
     return " · ".join(str(value) for value in frame[column].dropna().unique()) or "Source unavailable"
 
 
-def peak_observation(frame: pd.DataFrame, column: str = "tmax") -> str:
+def peak_observation(frame: pd.DataFrame, column: str = "tmax", measurement: str = "daily maximum") -> str:
     valid = frame.loc[frame[column].notna() & frame.date.notna()]
     if valid.empty:
         return "No valid temperatures are available in this displayed period."
@@ -28,7 +28,7 @@ def peak_observation(frame: pd.DataFrame, column: str = "tmax") -> str:
         location = f" at {row.latitude:g}°N, {row.longitude:g}°E"
     elif "city" in row:
         location = f" in {row.city}"
-    return f"The highest displayed temperature was {row[column]:.2f}°C on {row.date:%d %b %Y}{location}. Based on {len(valid):,} available readings; missing readings are excluded."
+    return f"The highest available {measurement} was {row[column]:.2f}°C on {row.date:%d %b %Y}{location}. Based on {len(valid):,} available values; missing values are excluded."
 
 
 def group_observation(table: pd.DataFrame, category: str, column: str = "mean_max") -> str:
@@ -75,7 +75,7 @@ def baseline_comparison(metrics: pd.DataFrame) -> tuple[pd.DataFrame, str]:
     return table, "; ".join(statements) + ". Lower error on this test period does not guarantee better future forecasts."
 
 
-def point_processing_summary(raw: pd.DataFrame, frame: pd.DataFrame, report: dict) -> dict:
+def point_processing_summary(raw: pd.DataFrame, frame: pd.DataFrame, report: dict, *, smoothing=False, window=7) -> dict:
     """Count distinct raw rows flagged by the existing QC rules, not mixed events.
 
     The original report's invalid_values_or_rows mixes value and row events;
@@ -96,7 +96,8 @@ def point_processing_summary(raw: pd.DataFrame, frame: pd.DataFrame, report: dic
             "Missing temperature values (max/min/mean)": int(report["missing_temperature_cells"]),
             "Date coverage": coverage(frame),
             "Interpolation by this application": "None; gaps remain missing",
-            "Smoothing": "Optional chart-only filter; never applied to stored values or ML inputs"}
+            "Smoothing": (f"Enabled for chart only: centered {window}-day Savitzky–Golay filter; no stored or ML values altered"
+                          if smoothing else "Signal filter off; trend includes a labeled 7-day rolling mean; no stored or ML values altered")}
 
 
 def imd_processing_summary(entry: dict) -> dict:
@@ -110,4 +111,4 @@ def imd_processing_summary(entry: dict) -> dict:
             "Date coverage": f"{entry['start']} – {entry['end']}",
             "Grid resolution": f"{entry['grid']['step']:g}°",
             "Interpolation by this application": "None; spatial interpolation belongs to the IMD source product",
-            "Smoothing": "No signal smoothing; cell trend includes a labeled 7-day rolling mean"}
+            "Smoothing": "7-day rolling mean in cell chart only; stored data and ML inputs remain unsmoothed"}

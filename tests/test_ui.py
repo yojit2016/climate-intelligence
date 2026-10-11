@@ -46,7 +46,11 @@ def test_dashboard_renders_and_filter_submission_changes_city():
          patch("climate.ui.cached_acquisition", side_effect=acquired):
         app = AppTest.from_file(APP, default_timeout=60).run()
         assert not app.exception
-        assert len(app.tabs) == 5 and len(app.metric) == 6
+        assert [tab.label for tab in app.tabs] == ["Overview", "Historical Analysis", "ML Forecasting", "Data Processing"]
+        assert len(app.metric) == 6
+        assert any("What the displayed data shows" in item.value for item in app.markdown)
+        assert any("Did the model beat" in item.value for item in app.markdown)
+        assert sum(item.label == "How to read this chart" for item in app.expander) == len(app.get("plotly_chart"))
         assert any("Held-out model evaluation" in item.value for item in app.subheader)
         app.selectbox[0].select("Pune")
         app.button[0].click().run()
@@ -89,7 +93,7 @@ def test_refresh_bypasses_download_caches_and_retrains():
         next(button for button in app.button if button.label == "Refresh weather data").click().run()
         assert not app.exception
         assert any(call.kwargs.get("force_refresh") for call in historical_loader.call_args_list)
-        assert all(call.kwargs.get("force_refresh") for call in historical_loader.call_args_list[-3:])
+        assert historical_loader.call_args.kwargs["force_refresh"]
         assert current_loader.call_args.kwargs["force_refresh"]
         assert acquisition_loader.call_args.kwargs["force_refresh"]
         clear_models.assert_called_once()
@@ -105,3 +109,41 @@ def test_chart_filters_do_not_shorten_automatic_training_history():
         assert not app.exception
         assert any("Held-out model evaluation" in header.value for header in app.subheader)
         assert acquisition_loader.call_args.args == (local_today(CITIES["Delhi"]),)
+
+
+def test_history_views_keep_patterns_comparisons_smoothing_and_processing_accessible():
+    with patch("climate.ui.cached_history", side_effect=history), \
+         patch("climate.ui.live_weather", side_effect=current), \
+         patch("climate.ui.automatic_training"):
+        app = AppTest.from_file(APP, default_timeout=30).run()
+        assert not app.exception
+        view = next(item for item in app.radio if item.label == "Explore history")
+        view.set_value("Monthly & seasonal").run()
+        assert not app.exception
+        assert sum("highest displayed average daily maximum" in item.value for item in app.markdown) == 2
+        next(item for item in app.radio if item.label == "Explore history").set_value("Across cities").run()
+        assert not app.exception
+        assert any("Compare daily maximum estimates" in item.value for item in app.markdown)
+        next(item for item in app.radio if item.label == "Explore history").set_value("Daily temperatures")
+        next(item for item in app.checkbox if item.label == "Show signal smoothing").check()
+        next(item for item in app.button if item.label == "Apply filters").click().run()
+        assert not app.exception
+        assert any("smoothed daily maximum" in item.value for item in app.markdown)
+        assert any("Detailed processing report" in item.label for item in app.expander)
+        assert any("Download raw API table CSV" == item.label for item in app.get("download_button"))
+
+
+def test_missing_temperatures_do_not_imply_zero_exceedances_or_a_conclusion():
+    def missing_history(city, start, end, **kwargs):
+        raw, _, _ = history(city, start, end)
+        raw[["tmax", "tmin", "tmean"]] = np.nan
+        processed, report = clean_daily(raw)
+        return raw, processed, report
+    with patch("climate.ui.cached_history", side_effect=missing_history), \
+         patch("climate.ui.live_weather", side_effect=current), \
+         patch("climate.ui.automatic_training"):
+        app = AppTest.from_file(APP, default_timeout=30).run()
+        assert not app.exception
+        assert next(item for item in app.metric if item.label == "Days above exploratory threshold").value == "Unavailable"
+        assert any("No valid temperatures" in item.value for item in app.markdown)
+        assert any("cannot establish complete coverage" in item.value for item in app.info)

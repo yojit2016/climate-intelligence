@@ -9,6 +9,8 @@ from climate.evaluation import ModelUnavailable
 from climate.locations import CITIES
 from climate.model import train_and_predict
 from climate.weather import local_today
+from climate.presentation import chart_story, model_intro, evaluation_story
+from climate.storytelling import prediction_observation, baseline_comparison, sources
 
 LOGGER = logging.getLogger(__name__)
 cached_model = st.cache_resource(ttl=21600, max_entries=8, show_spinner=False)(train_and_predict)
@@ -16,6 +18,7 @@ cached_model = st.cache_resource(ttl=21600, max_entries=8, show_spinner=False)(t
 
 def forecast_panel(frame: pd.DataFrame):
     st.subheader("Local Random Forest model")
+    model_intro()
     origin = frame.date.max()
     city = frame.city.iloc[0]
     today = local_today(CITIES[city])
@@ -32,12 +35,19 @@ def forecast_panel(frame: pd.DataFrame):
         st.error("Local ML training failed. No predictions were generated. Check application logs and retry with a different date range.")
     else:
         st.plotly_chart(prediction_chart(frame, result.predictions), width="stretch")
+        shown = pd.concat([frame.tail(21)[["date"]], result.predictions[["date"]]], ignore_index=True)
+        chart_story(shown, "Recent history provides context for the next three model prediction dates. The dotted baseline repeats the latest daily maximum.",
+                    prediction_observation(result.predictions),
+                    "Solid values are historical inputs. Dashed estimates are local Random Forest outputs; the dotted line is persistence. Prediction dates follow the history endpoint, so stale history produces historical experiments rather than upcoming forecasts.", source=sources(frame))
         st.dataframe(result.predictions[["date", "horizon", "prediction", "baseline"]],
                      hide_index=True, width="stretch")
-        st.subheader("Held-out model evaluation")
-        st.caption("MAE and RMSE in °C; lower is better. Targets are historical reanalysis/model estimates, not independent station measurements. Persistence repeats the maximum at each forecast origin.")
-        st.dataframe(result.metrics, hide_index=True, width="stretch")
+        evaluation_story(result)
+        st.caption("Test targets are Open-Meteo reanalysis/model estimates, not independent station measurements.")
         st.plotly_chart(evaluation_chart(result.test_predictions), width="stretch")
+        first = result.test_predictions.loc[result.test_predictions.horizon == 1]
+        _, verdict = baseline_comparison(result.metrics.loc[result.metrics.horizon == 1])
+        chart_story(first, "This compares one-day-ahead predictions with the actual held-out source targets. These dates were reserved for evaluation.",
+                    verdict, "Look for agreement with the held-out target line. This chart shows only the one-day horizon; the error table evaluates all three. Test scoring uses past values available at each origin, not future temperatures.", source=sources(frame))
         test = result.metrics.query("partition == 'Test'")
         pivot = test.pivot(index="horizon", columns="model", values="mae")
         worse = pivot.index[pivot["Random Forest"] >= pivot["Persistence"]].tolist()
