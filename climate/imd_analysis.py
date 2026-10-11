@@ -16,6 +16,59 @@ class NearestCell:
     valid_days: int
 
 
+def _single_grid(frame: pd.DataFrame) -> None:
+    if frame.empty or frame.date.isna().any() or frame.date.nunique() != 1:
+        raise IMDFormatError("Select exactly one nonempty IMD product date per grid.")
+    if frame.duplicated(["latitude", "longitude"]).any() or frame.data_source.nunique() != 1:
+        raise IMDFormatError("A daily grid must have unique coordinates and one source product.")
+
+
+def hottest_cells(frame: pd.DataFrame, limit: int = 5) -> pd.DataFrame:
+    """Rank valid cells of one product date; ties use increasing coordinates."""
+    _single_grid(frame)
+    if limit < 1:
+        raise ValueError("Ranking limit must be positive.")
+    ranked = frame.dropna(subset=["maximum_temperature_c"]).sort_values(
+        ["maximum_temperature_c", "latitude", "longitude"], ascending=[False, True, True]).head(limit)
+    ranked = ranked[["latitude", "longitude", "maximum_temperature_c", "date", "data_source"]].reset_index(drop=True)
+    ranked.insert(0, "rank", np.arange(1, len(ranked) + 1))
+    return ranked
+
+
+def compare_dates(first: pd.DataFrame, second: pd.DataFrame) -> pd.DataFrame:
+    """Date B minus A at exact shared coordinates; missing on either date stays NaN."""
+    _single_grid(first)
+    _single_grid(second)
+    keys = ["latitude", "longitude"]
+    a_coords = pd.MultiIndex.from_frame(first[keys]).sort_values()
+    b_coords = pd.MultiIndex.from_frame(second[keys]).sort_values()
+    if not a_coords.equals(b_coords) or first.data_source.iloc[0] != second.data_source.iloc[0]:
+        raise IMDFormatError("Date comparisons require the same grid coordinates and source product.")
+    a = first[keys + ["date", "maximum_temperature_c"]].rename(
+        columns={"date": "date_a", "maximum_temperature_c": "maximum_temperature_a_c"})
+    b = second[keys + ["date", "maximum_temperature_c"]].rename(
+        columns={"date": "date_b", "maximum_temperature_c": "maximum_temperature_b_c"})
+    result = a.merge(b, on=keys, validate="one_to_one").sort_values(keys).reset_index(drop=True)
+    result["difference_c"] = result.maximum_temperature_b_c - result.maximum_temperature_a_c
+    result["data_source"] = first.data_source.iloc[0]
+    return result
+
+
+def difference_findings(frame: pd.DataFrame) -> str:
+    valid = frame.dropna(subset=["difference_c"])
+    if valid.empty:
+        return "No grid cells have valid maximum temperatures on both dates; differences are unavailable."
+    parts = [f"{len(valid):,} cells are valid on both dates (B minus A)."]
+    for name, subset, largest in [("increase", valid.loc[valid.difference_c > 0], True),
+                                  ("decrease", valid.loc[valid.difference_c < 0], False)]:
+        if subset.empty:
+            parts.append(f"No {name}s among jointly valid cells.")
+        else:
+            row = subset.loc[subset.difference_c.idxmax() if largest else subset.difference_c.idxmin()]
+            parts.append(f"Largest {name}: {abs(row.difference_c):.2f}°C at {row.latitude:g}°N, {row.longitude:g}°E.")
+    return " ".join(parts)
+
+
 def nearest_available(frame: pd.DataFrame, latitude: float, longitude: float) -> NearestCell:
     """Nearest cell with any valid value in the supplied period, by great-circle distance.
 
