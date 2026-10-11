@@ -6,6 +6,13 @@ validates it, visualizes daily/monthly/seasonal patterns, compares cities, and
 trains three direct Random Forest temperature models with held-out evaluation.
 No synthetic weather, hardcoded metrics or fallback predictions are used.
 
+**Official IMD grids:** choose **IMD gridded temperature** in the sidebar for
+validated annual 1° GRD import, recent daily 0.5° GRD + CTL import, geographic
+heatmaps, CSV/Parquet exports, and separate historical grid-cell analytics/ML.
+IMD site requests timed out in this development environment, so downloads use
+the manual official-file workflow. No live IMD GRD download is claimed.
+See [IMD format, import instructions and scientific limitations](docs/IMD.md).
+
 ## Run locally
 
 Python 3.11+ is required (verified on Windows with Python 3.13).
@@ -198,6 +205,12 @@ live verification.
 
 ## Adding another provider
 
+IMD has a dedicated grid ingestion path (`imd_format`, `imd_parser`, `imd_store`,
+`imd_charts`, `imd_ui`). It reuses analytics/ML only after extracting an explicitly
+selected historical grid cell. It is not treated as an Open-Meteo point adapter;
+its grids and forecasts are never blended with point estimates. The following
+contract is for additional compatible point-weather providers.
+
 `climate.sources.WeatherSource` defines the provider contract. Implement a unique,
 versioned `cache_id`, `history(city, start, end)`, `current(city)` and `close()`.
 Historical tables use timezone-aware `date`, `city`, `tmax`, `tmin`, `tmean`,
@@ -209,8 +222,8 @@ missing. Label direct observations and modeled estimates accurately.
 Pass an adapter to `load_history(..., source=adapter)` or
 `load_current(..., source=adapter)` to reuse validation and isolated local caches.
 Supplied adapters remain caller-owned and should be closed by the caller.
-`OpenMeteoSource` is the working adapter; IMD and NASA POWER are extension targets,
-not implemented or advertised as connected data feeds.
+`OpenMeteoSource` is the working automatic point adapter. IMD manual gridded
+support is described above; NASA POWER remains an unimplemented extension target.
 
 ## Project layout
 
@@ -222,6 +235,11 @@ climate/
   weather.py            API retrieval, parsing and provenance
   sources.py            Provider contract and Open-Meteo adapter
   acquisition.py        Automatic three-year acquisition for all cities
+  imd_format.py         Official grid contracts and CTL validation
+  imd_parser.py         Strict NumPy GRD decoding and quality checks
+  imd_store.py          Separate raw IMD files, Parquet and metadata
+  imd_charts.py         Geographic grid heatmaps
+  imd_ui.py             Manual import, maps and isolated cell analytics/ML
   cache.py              Atomic Parquet caching
   processing.py         Quality controls and hourly aggregation
   smoothing.py          Gap-aware signal filter
