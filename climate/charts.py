@@ -67,7 +67,7 @@ def prediction_chart(history: pd.DataFrame, predictions: pd.DataFrame) -> go.Fig
                     mode="lines+markers", line=dict(color=COLORS[2], dash="dash"))
     fig.add_scatter(x=predictions.date, y=predictions.baseline, name="Persistence baseline",
                     mode="lines+markers", line=dict(color="#9aa1a9", dash="dot"))
-    return finish(fig, "Local ML model · three direct prediction horizons")
+    return finish(fig, "Predicted daily maximum for three dates")
 
 
 def evaluation_chart(test: pd.DataFrame) -> go.Figure:
@@ -76,4 +76,4 @@ def evaluation_chart(test: pd.DataFrame) -> go.Figure:
     for trace in fig.data:
         trace.name = {"actual": "Held-out reanalysis/model target", "prediction": "Random Forest",
                       "baseline": "Persistence"}[trace.name]
-    return finish(fig, "Held-out test period · day-one predictions")
+    return finish(fig, "One-day predictions compared with held-out temperatures")
