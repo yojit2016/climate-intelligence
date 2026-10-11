@@ -8,7 +8,7 @@ import requests
 from climate.api import WeatherClient, WeatherError
 from climate.cache import ParquetCache
 from climate.locations import CITIES
-from climate.weather import historical, parse_daily
+from climate.weather import current_and_forecast, historical, parse_daily
 
 
 def payload(dates):
@@ -59,3 +59,18 @@ def test_parquet_cache_roundtrip_and_expiry(tmp_path):
     assert cache.read(key, ttl=-1) is None
     cache.path(key).write_bytes(b"corrupt parquet")
     assert cache.read(key) is None
+
+
+def test_invalid_current_structure_is_an_explicit_weather_error():
+    client = Mock()
+    client.get.return_value = {**payload(["2025-01-01"]), "current": []}
+    with pytest.raises(WeatherError, match="current conditions"):
+        current_and_forecast(client, CITIES["Delhi"])
+
+
+def test_cache_cleanup_failure_does_not_break_ingestion(tmp_path, monkeypatch):
+    from pathlib import Path
+    cache = ParquetCache(tmp_path)
+    monkeypatch.setattr(pd.DataFrame, "to_parquet", Mock(side_effect=OSError("read only")))
+    monkeypatch.setattr(Path, "unlink", Mock(side_effect=PermissionError("cannot remove")))
+    cache.write({"city": "Delhi"}, pd.DataFrame({"tmax": [32.]}))

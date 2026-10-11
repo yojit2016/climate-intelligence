@@ -67,5 +67,7 @@ def current_and_forecast(client: WeatherClient, city: City) -> tuple[dict, pd.Da
         **parameters(city), "current": "temperature_2m,relative_humidity_2m",
         "daily": DAILY, "forecast_days": 4})
     current = payload.get("current", {})
+    if not isinstance(current, dict):
+        raise WeatherError("Weather service returned invalid current conditions.")
     # These are model estimates, not station measurements.
     return current, parse_daily(payload, city, "Open-Meteo forecast")

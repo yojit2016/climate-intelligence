@@ -41,4 +41,7 @@ class ParquetCache:
             LOGGER.warning("Cannot write cache: %s", exc)
         finally:
             if temp is not None:
-                temp.unlink(missing_ok=True)
+                try:
+                    temp.unlink(missing_ok=True)
+                except OSError as exc:
+                    LOGGER.warning("Cannot remove temporary cache file: %s", exc)
