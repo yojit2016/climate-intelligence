@@ -37,7 +37,11 @@ def test_imported_imd_workspace_maps_dates_and_evaluates_grid_cell(tmp_path):
     with patch("climate.imd_ui.IMDStore", return_value=store):
         app = AppTest.from_string("from climate.imd_ui import render_imd\nrender_imd()", default_timeout=60).run()
         assert not app.exception
-        assert len(app.tabs) == 3 and len(app.get("plotly_chart")) == 3
+        assert [tab.label for tab in app.tabs] == ["Overview", "Historical Analysis", "ML Forecasting", "Data Processing"]
+        assert len(app.get("plotly_chart")) == 3
+        assert any("What the displayed data shows" in item.value for item in app.markdown)
+        assert any("historical/static" in item.value for item in app.caption)
+        assert sum(item.label == "How to read this chart" for item in app.expander) == len(app.get("plotly_chart"))
         app.date_input[0].set_value(date(2025, 7, 1)).run()
         assert not app.exception
         next(item for item in app.checkbox if item.label.startswith("Evaluate Random Forest")).check().run()
