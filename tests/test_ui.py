@@ -89,6 +89,7 @@ def test_refresh_bypasses_download_caches_and_retrains():
         next(button for button in app.button if button.label == "Refresh weather data").click().run()
         assert not app.exception
         assert any(call.kwargs.get("force_refresh") for call in historical_loader.call_args_list)
+        assert all(call.kwargs.get("force_refresh") for call in historical_loader.call_args_list[-3:])
         assert current_loader.call_args.kwargs["force_refresh"]
         assert acquisition_loader.call_args.kwargs["force_refresh"]
         clear_models.assert_called_once()

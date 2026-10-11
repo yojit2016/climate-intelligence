@@ -124,10 +124,10 @@ def render():
     st.caption(f"{city} · {start:%d %b %Y} — {end:%d %b %Y} · All temperatures in °C")
     st.info("Historical values come exclusively from the Historical API and are reanalysis/model estimates. Current conditions and provider forecasts are model output. Exploratory thresholds are not official warnings.")
     current_cards(city)
+    refresh_history = st.session_state.pop("refresh_history", False)
     try:
         with st.spinner("Loading historical weather…"):
-            raw, frame, report = cached_history(city, start, end,
-                                               force_refresh=st.session_state.pop("refresh_history", False))
+            raw, frame, report = cached_history(city, start, end, force_refresh=refresh_history)
     except (WeatherError, ValueError, OSError) as exc:
         LOGGER.exception("History unavailable")
         st.error(f"Historical data unavailable: {exc}")
@@ -151,7 +151,9 @@ def render():
     with patterns:
         patterns_panel(frame)
     with regions:
-        regional_panel(frame, comparison, start, end, threshold, cached_history)
+        def comparison_history(name, first, last):
+            return cached_history(name, first, last, force_refresh=refresh_history)
+        regional_panel(frame, comparison, start, end, threshold, comparison_history)
     with prediction:
         automatic_training(city)
     with data:
