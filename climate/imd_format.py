@@ -66,7 +66,7 @@ def control_spec(text: str, product: str, byte_order: str) -> GridSpec:
         raise IMDFormatError("CTL dimensions/resolution do not match the selected IMD product.")
     if not np.isfinite([lon, lat, missing]).all() or (lon, lat) != (67.5, 7.5):
         raise IMDFormatError("Expected the India grid beginning at 67.5°E, 7.5°N.")
-    if product == "historical" and not np.isclose(missing, 99.9):
+    if product == "historical" and missing != 99.9:
         raise IMDFormatError("Historical IMD Tmax uses UNDEF 99.9.")
     if -90 <= missing <= 65:
         raise IMDFormatError("UNDEF overlaps the accepted temperature range.")
@@ -80,7 +80,7 @@ def control_spec(text: str, product: str, byte_order: str) -> GridSpec:
         raise IMDFormatError("Selected byte order disagrees with the CTL OPTIONS.")
     if any(key in fields for key in ("FILEHEADER", "THEADER", "XYHEADER", "HEADERBYTES", "DTYPE")):
         raise IMDFormatError("Only headerless 4-byte float binary files are supported.")
-    if "ZDEF" in fields and fields["ZDEF"][0] != "1":
+    if "ZDEF" in fields and (not fields["ZDEF"] or fields["ZDEF"][0] != "1"):
         raise IMDFormatError("Only a single vertical level is supported.")
     if "VARS" in fields and fields["VARS"] != ["1"]:
         raise IMDFormatError("Only single-variable maximum-temperature files are supported.")

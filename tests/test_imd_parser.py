@@ -48,7 +48,8 @@ def test_recent_grid_requires_matching_control_and_rejects_orientation_changes()
     parsed = parse_grd(payload, product="recent", day=date(2025, 1, 1), byte_order="<", control_text=ctl())
     assert len(parsed.frame) == 61 ** 2
     assert parsed.frame.iloc[1].longitude == 68.
-    for bad_control in (ctl(options="yrev"), ctl(options="big_endian"), ctl(size=31, step=1), ctl(origin="2JAN2025")):
+    for bad_control in (ctl(options="yrev"), ctl(options="big_endian"), ctl(size=31, step=1),
+                        ctl(origin="2JAN2025"), ctl().replace("ZDEF 1 LINEAR 1 1", "ZDEF")):
         with pytest.raises(IMDFormatError):
             parse_grd(payload, product="recent", day=date(2025, 1, 1), byte_order="<", control_text=bad_control)
     with pytest.raises(IMDFormatError, match="matching official"):
