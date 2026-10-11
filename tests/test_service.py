@@ -12,7 +12,7 @@ def test_ingestion_preserves_raw_and_materializes_absent_calendar_days(tmp_path,
                         "city": "Delhi", "tmax": [30., 32.], "tmin": [20., 22.], "tmean": [25., 27.],
                         "source": "OFFLINE TEST FIXTURE", "retrieved_at": pd.Timestamp.now(tz="UTC")})
     upstream = Mock(return_value=raw)
-    monkeypatch.setattr("climate.service.historical", upstream)
+    monkeypatch.setattr("climate.sources.historical", upstream)
     original = raw.copy(deep=True)
     ingested, processed, quality = load_history("Delhi", date(2025, 1, 1), date(2025, 1, 3))
     pd.testing.assert_frame_equal(ingested, original)
