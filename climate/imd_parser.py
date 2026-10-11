@@ -12,9 +12,32 @@ from climate.imd_format import HISTORICAL, GridSpec, IMDFormatError, control_spe
 
 
 @dataclass
+class GridCube:
+    """Coordinate-aware analysis cube; axes are date, latitude, longitude."""
+    dates: pd.DatetimeIndex
+    latitudes: np.ndarray
+    longitudes: np.ndarray
+    maximum_temperature_c: np.ndarray
+    data_source: str
+    dimensions: tuple[str, ...] = ("date", "latitude", "longitude")
+    units: str = "degrees Celsius"
+
+
+@dataclass
 class ParsedGrid:
     frame: pd.DataFrame
     metadata: dict
+
+    def cube(self) -> GridCube:
+        """Build a labeled NumPy equivalent of an xarray temperature Dataset."""
+        spec = GridSpec(**self.metadata["grid"])
+        dates = pd.date_range(self.metadata["start"], periods=self.metadata["days"],
+                              freq="D", tz="Asia/Kolkata")
+        index = pd.MultiIndex.from_product([dates, spec.latitudes, spec.longitudes],
+                                           names=["date", "latitude", "longitude"])
+        values = self.frame.set_index(list(index.names))["maximum_temperature_c"].reindex(index)
+        return GridCube(dates, spec.latitudes, spec.longitudes,
+                        values.to_numpy().reshape(len(dates), spec.size, spec.size), spec.source)
 
 
 def validate_control_time(text: str, first: date, days: int) -> None:
