@@ -9,9 +9,21 @@ No synthetic weather, hardcoded metrics or fallback predictions are used.
 **Official IMD grids:** choose **IMD gridded temperature** in the sidebar for
 validated annual 1° GRD import, recent daily 0.5° GRD + CTL import, geographic
 heatmaps, CSV/Parquet exports, and separate historical grid-cell analytics/ML.
-IMD site requests timed out in this development environment, so downloads use
-the manual official-file workflow. No live IMD GRD download is claimed.
+The supplied official **2025 GRD has been validated and cached locally**: 365 days,
+129,552 valid readings, 5.3067–46.1526 °C. Select the imported 2025 dataset to
+explore it, including nearest available 1° cells and coverage-aware statistics.
+See the [actual-file validation record](docs/IMD_2025_VALIDATION.md).
+Automatic IMD downloading remains unverified; local files use the manual workflow.
 See [IMD format, import instructions and scientific limitations](docs/IMD.md).
+
+To recreate the IMD cache from the supplied file (no network needed):
+
+```powershell
+.\.venv\Scripts\python -m climate.imd_import data/Maxtemp_MaxT_2025.GRD --year 2025 --byte-order little
+```
+
+If stored under `data/raw/imd/`, substitute that path. Raw and processed data are
+excluded from Git, so other checkouts must obtain the official file and import it.
 
 ## Run locally
 

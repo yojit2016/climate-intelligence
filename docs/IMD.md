@@ -23,11 +23,13 @@ No authentication, CAPTCHA or access restriction is bypassed.
 
 Use the official site in your browser and follow its normal download procedure.
 If it requires sign-in or another access step, complete that yourself through the
-official page. Upload the downloaded GRD through the dashboard. **No actual IMD
-GRD download or live IMD temperature validation is claimed for this environment.**
-Automated tests use explicitly labeled synthetic binary fixtures only to check
-decoding, validation, storage, charts and model execution. They are not installed
-as user-visible weather data.
+official page. Upload the downloaded GRD through the dashboard or import locally
+with the command below. **Automated IMD downloads and a live IMD stream remain
+unverified.** The user-supplied official 2025 GRD has now been tested directly,
+converted to Parquet and exercised through the dashboard and historical model.
+See the [actual-file validation record](IMD_2025_VALIDATION.md).
+Unit tests also use explicitly labeled binary fixtures for corruption/edge cases;
+those fixtures are never installed as user-visible weather data.
 
 ## Supported binary contracts
 
@@ -76,6 +78,24 @@ must be obtained/exported using a documented supported format first.
 4. Upload the GRD and, for recent data, its matching CTL.
 5. Confirm the product and documented axis orientation, then select
    **Validate and import IMD data**.
+
+For an annual file already in this workspace, run from the repository root:
+
+```powershell
+.\.venv\Scripts\python -m climate.imd_import data/Maxtemp_MaxT_2025.GRD --year 2025 --byte-order little
+```
+
+Change the path to `data/raw/imd/Maxtemp_MaxT_2025.GRD` if appropriate. The command
+requires an explicit year and byte order, validates before writing, prints the
+actual counts/range/SHA-256 and Parquet path, and preserves the original input.
+Its imported dataset is immediately listed in the dashboard's IMD workspace.
+It never downloads data or invokes Open-Meteo. Repeating it reuses dataset identity.
+
+`ParsedGrid.cube()` exposes a labeled NumPy analysis structure with dimensions
+`(date, latitude, longitude)`, timezone-aware dates, coordinate arrays, units,
+source and a float32 temperature cube. This is the coordinate-aware equivalent
+of an xarray Dataset without introducing another dependency. Parquet retains the
+complete long-form representation, including null cells.
 
 Before accepting the data, the parser checks exact byte count, calendar record
 count, control-file consistency, coordinate extent and increasing axis order.
@@ -138,9 +158,24 @@ comparisons. No spatial interpolation is added by the plot.
 
 For analytics, select one version per historical year and an exact 1° grid
 coordinate. City names help locate a nearby cell, but the cell's coordinates
-are always displayed. Missing coastal/masked cells do not silently move to a
-different grid point. Overlapping annual versions are rejected. Historical 1°
+are always displayed. **Nearest available to location** uses great-circle distance
+to a cell with at least one valid date in the selected history. The requested
+location, actual cell coordinates, distance in km, valid-date count and 1°
+resolution are shown. Users may enter custom coordinates within the grid domain.
+This is a spatial lookup, not interpolation to a city or a guarantee of complete
+daily coverage. **Exact grid coordinate** keeps the requested cell even when it
+is entirely missing. No mode fills absent temperatures.
+Overlapping annual versions are rejected. Historical 1°
 and recent 0.5° files are never joined into one temperature time series.
+
+The map reports valid-cell count and lowest/highest available Tmax for the selected
+date. Its grid-statistics expander provides downloadable daily, monthly and
+calendar-year seasonal tables with sample mean, minimum/maximum Tmax and
+valid/missing cell-day counts. These are unweighted summaries of the available
+grid domain, not area-weighted India averages; geographic coverage can change.
+Minimum Tmax means the lowest daily maximum, not Tmin. Winter combines January,
+February and December within each file year. The cell panel also exposes the
+daily series alongside monthly/seasonal summaries.
 
 The extracted historical cell reuses the application's summary, rolling,
 monthly/seasonal and Random Forest pipeline, including causal lag features,
@@ -181,5 +216,8 @@ Atmospheric Science Letters, [doi:10.1002/asl.232](https://doi.org/10.1002/asl.2
 Tests check documented grid corners and ordering, sentinel masking, leap-year
 sizes, explicit byte orders, malformed control files, corruption, conversion,
 Parquet filtering, source-isolated model execution, empty-state source isolation,
-date changes and dashboard model evaluation. These are deterministic fixture
-checks; real-file validation occurs when a user imports their official GRD.
+date changes and dashboard model evaluation. `tests/test_imd_actual.py` additionally
+checks the supplied actual 2025 file, including raw byte offsets and content hash,
+Parquet round trips, maps, statistics, nearest-cell selection and dashboard model
+execution. It explicitly skips if the official file is absent from another
+checkout; it never substitutes generated weather for actual-file validation.
