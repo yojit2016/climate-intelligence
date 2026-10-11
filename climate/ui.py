@@ -119,6 +119,11 @@ def automatic_training(city: str):
 def render():
     st.set_page_config(page_title="Climate Intelligence", layout="wide")
     st.markdown(CSS, unsafe_allow_html=True)
+    workspace = st.sidebar.radio("Data workspace", ["Open-Meteo point estimates", "IMD gridded temperature"], key="data_workspace")
+    if workspace == "IMD gridded temperature":
+        from climate.imd_ui import render_imd
+        render_imd()
+        return
     city, start, end, threshold, smoothing, window, comparison = filters()
     st.title("Heatwave analytics")
     st.caption(f"{city} · {start:%d %b %Y} — {end:%d %b %Y} · All temperatures in °C")
