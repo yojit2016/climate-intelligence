@@ -51,3 +51,14 @@ def test_dashboard_explains_api_failure():
         app = AppTest.from_file(APP, default_timeout=30).run()
         assert not app.exception
         assert any("Historical data unavailable" in error.value for error in app.error)
+
+
+def test_dashboard_explains_insufficient_history_without_predictions():
+    def short_history(city, start, end):
+        return history(city, end - timedelta(days=30), end)
+    with patch("climate.ui.cached_history", side_effect=short_history), \
+         patch("climate.ui.live_weather", side_effect=current):
+        app = AppTest.from_file(APP, default_timeout=30).run()
+        assert not app.exception
+        assert any("Local ML predictions unavailable" in info.value for info in app.info)
+        assert not any("Held-out model evaluation" in header.value for header in app.subheader)
