@@ -29,27 +29,40 @@ python3 -m venv .venv
 .venv/bin/python -m streamlit run app.py
 ```
 
-The first load downloads one year for Delhi and the default comparison cities
-(Mumbai and Pune), then evaluates and trains the local models. It needs an
+The first load automatically downloads **three calendar years for all six supported
+cities**, then evaluates and trains the selected city's local models. It needs an
 internet connection; the public noncommercial API needs no key. Choose cities,
 dates, an exploratory threshold and smoothing settings in the sidebar, then
-select **Apply filters**. Use the five tabs for trends, seasonal patterns,
-regional comparisons, ML predictions and CSV downloads. Dates use Asia/Kolkata.
+select **Apply filters**. Chart filters do not shorten or otherwise change the
+automatic three-year training dataset. Use the five tabs for trends, seasonal
+patterns, regional comparisons, ML predictions and CSV downloads. The current
+conditions section includes a separate expandable provider forecast. Dates use Asia/Kolkata.
 Requests are limited to ten years each to bound download and training costs.
+
+**Refresh weather data** immediately bypasses the on-disk caches for current
+conditions, the primary/comparison chart ranges and all six training datasets, and clears
+trained-model results. You do not need to download CSVs or supply training files.
+Current conditions and provider forecasts update automatically every fifteen
+minutes while the dashboard is open. Automatic training acquisition is checked
+every six hours; its end date always follows the latest completed local day.
+These are Streamlit session timers, not an operating-system scheduled service:
+closing the dashboard stops timed refreshes; reopening it checks the caches.
 
 ## What the data represents
 
 - **Historical:** Open-Meteo Historical Weather API reanalysis/model estimates,
-  not direct station measurements. The archive is used through five days ago.
-- **Recent completed days:** the Forecast API's past-days weather model output
-  bridges the archive's reporting delay. These records carry their own source
-  label. Mixing products can introduce differences; source counts are visible.
+  not direct station measurements. All completed days, including recent days,
+  are requested exclusively from `/v1/archive` using its default Best Match
+  product. No past weather is requested from the Forecast API. If recent archive
+  values are unavailable, they remain missing and the model explains why it
+  cannot predict. There is no substituted forecast-history bridge.
 - **Current temperature/humidity:** current weather model estimates, with the
   provider timestamp displayed. Null or unavailable values show `Unavailable`.
 - **Provider forecast:** Open-Meteo's next four calendar days, displayed as a
   separate product. These values are never local ML model features or outputs.
 - **Local ML prediction:** three horizon-specific Random Forest regressors
-  trained here, using daily maxima from the chosen historical range.
+  trained here, using daily maxima from the automatically acquired three-year
+  history for the primary city, independently of chart filters.
 
 An arbitrary temperature threshold is **exploratory**, not an official heatwave
 warning. The app does not implement an IMD heatwave classification. Its local
@@ -94,8 +107,9 @@ For an origin `t` after a completed local day, each model predicts `t+h` for
 no temperatures after `t`. Calendar gaps stay missing; feature/target rows with
 missing values are excluded. The latest fourteen days must be complete to infer.
 
-Each horizon requires at least 120 complete rows (select roughly six months or
-more). Models use chronological 70/15/15 train/validation/test blocks, with labels
+Each horizon requires at least 120 complete rows. Automatic acquisition normally
+provides three years; missing values can reduce usable rows. Models use chronological
+70/15/15 train/validation/test blocks, with labels
 crossing block boundaries removed. Validation MAE selects a maximum tree depth
 of six or unrestricted. Forests have 160 trees, a minimum leaf size of three and
 a fixed random seed. The selected settings are refit on pre-test labels only
@@ -109,10 +123,11 @@ dashboard explicitly warns when Random Forest fails to improve baseline MAE.
 It also explains insufficient data and training failures instead of inventing
 predictions.
 
-Predicted dates follow the **selected range endpoint**, not necessarily today.
-With yesterday as the endpoint, horizons 1–3 refer to today and the following two
-days. Historical endpoints produce predictions following that historical date,
-with a prominent warning. Models have no exogenous weather inputs, spatial
+Predicted dates follow the **automatic training history endpoint**, which is
+yesterday, independently of chart date filters. Horizons 1–3 therefore refer to
+today and the following two days. Missing recent historical values prevent
+inference; older values are never passed off as current forecasts.
+Models have no exogenous weather inputs, spatial
 features, calibrated uncertainty bands or operational warning capability. Their
 accuracy can be worse than persistence, especially during abrupt weather changes.
 
@@ -121,6 +136,11 @@ accuracy can be worse than persistence, especially during abrupt weather changes
 `data/raw/` stores ingested API tables as Parquet; `data/processed/` stores separate
 quality-controlled tables. File writes use atomic replacement. Historical request
 caches expire after six hours, current/provider forecasts after fifteen minutes.
+Current conditions and forecasts have their own raw and processed Parquet tables
+under `data/raw/current/` and `data/processed/current/`. Temperatures and humidity
+are validated, and current timestamps are normalized to the location timezone.
+Cache keys include the provider identity and schema version; older mixed-source
+history caches cannot be reused as archive-only training data.
 Expired data is not silently served on network failure. Failed requests retry
 transient server errors and rate limits three times with bounded backoff and
 timeouts; errors remain visible. Cached successful history can be used offline
@@ -128,8 +148,12 @@ until expiry. Cache write failures are logged.
 
 Trained model results are cached in memory by historical dataset for six hours,
 with a bounded entry count. No model binaries are loaded from disk. Restarting
-the server clears in-memory caches. To force a full refresh, stop the server,
-remove the generated `data/` directory and restart.
+the server clears in-memory caches. Use **Refresh weather data** to force fresh
+downloads and model retraining without deleting files or restarting the server.
+Acquisition continues across all cities if individual requests fail. The ML tab
+shows each city's available maximum-temperature count and explicit download errors;
+partial failures can be retried with the refresh button. Failed refresh requests
+leave existing files intact but do not silently return them as fresh data.
 
 The Data tab downloads both raw and processed CSV tables. Exports retain city,
 source, retrieval timestamp and timezone offsets; missing values remain blank.
@@ -141,20 +165,52 @@ excluded from Git. No remote is configured by this project.
 ```powershell
 .\.venv\Scripts\python -m pytest -q
 .\.venv\Scripts\python -m pip check
-.\.venv\Scripts\python -m climate.check --city Delhi --days 365
+.\.venv\Scripts\python -m climate.check --all-cities --refresh
 ```
 
 The default tests are offline and cover processing, timezone aggregation,
 smoothing gaps, causal features, purged splits, metrics, prediction failures,
-API parsing/errors, cache expiry, chart serialization, CSV exports and Streamlit
+API parsing/errors, provider-isolated caching, cache expiry, manual refresh,
+multi-city acquisition failures, chart serialization, CSV exports and Streamlit
 rendering/filter submission. Synthetic values exist only in explicitly labelled
 test fixtures, patched into offline tests; application paths always use real data.
 
-The diagnostic command makes real network requests and prints data quality,
+The diagnostic command bypasses caches with `--refresh`, makes real network
+requests for every supported city and prints data quality, historical sources,
 provider forecasts, local predictions and evaluation metrics. It returns a
 nonzero exit status if ingestion or training fails. Live API access is deliberately
 separate from deterministic tests. Server health is available at
 http://localhost:8501/_stcore/health.
+
+For a smaller first download or network troubleshooting, run:
+
+```powershell
+.\.venv\Scripts\python -m climate.check --city Delhi --years 3 --refresh
+```
+
+Use `--years 4` or `--years 5` for longer CLI acquisition, or omit `--refresh` to
+reuse valid local caches. `--days` remains available for a custom single-city
+diagnostic; it does not change the dashboard's automatic three-year training range.
+If API access is blocked, run this command locally with internet access, allowing
+HTTPS to `archive-api.open-meteo.com` and `api.open-meteo.com`. No dataset import or
+API key is required. API failures are reported explicitly rather than counted as
+live verification.
+
+## Adding another provider
+
+`climate.sources.WeatherSource` defines the provider contract. Implement a unique,
+versioned `cache_id`, `history(city, start, end)`, `current(city)` and `close()`.
+Historical tables use timezone-aware `date`, `city`, `tmax`, `tmin`, `tmean`,
+`source` and preferably `retrieved_at`; temperatures must use Celsius. Current
+values use `time`, `temperature_2m`, `relative_humidity_2m` and an explicit `source`.
+Return the current mapping together with a daily forecast table. Null values stay
+missing. Label direct observations and modeled estimates accurately.
+
+Pass an adapter to `load_history(..., source=adapter)` or
+`load_current(..., source=adapter)` to reuse validation and isolated local caches.
+Supplied adapters remain caller-owned and should be closed by the caller.
+`OpenMeteoSource` is the working adapter; IMD and NASA POWER are extension targets,
+not implemented or advertised as connected data feeds.
 
 ## Project layout
 
@@ -164,6 +220,8 @@ climate/
   api.py                Retrying HTTP transport and explicit errors
   locations.py          City coordinates and timezones
   weather.py            API retrieval, parsing and provenance
+  sources.py            Provider contract and Open-Meteo adapter
+  acquisition.py        Automatic three-year acquisition for all cities
   cache.py              Atomic Parquet caching
   processing.py         Quality controls and hourly aggregation
   smoothing.py          Gap-aware signal filter
@@ -175,7 +233,7 @@ climate/
   charts.py             Plotly figures
   ui.py                 Filters, cards, caching and layout
   panels.py             Descriptive analysis panels
-  forecast_panel.py     Local ML and separate provider forecast panels
+  forecast_panel.py     Local ML forecasting and held-out evaluation
   export.py             CSV serialization
   style.py              Compact neutral styling
   check.py              Live-data diagnostic CLI
