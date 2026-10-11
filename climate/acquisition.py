@@ -7,13 +7,11 @@ import pandas as pd
 
 from climate.api import WeatherError
 from climate.locations import CITIES
-from climate.service import load_history
+from climate.service import CURRENT_TTL, HISTORY_TTL, load_history
 from climate.weather import local_today
 
 LOGGER = logging.getLogger(__name__)
 TRAINING_YEARS = 3
-HISTORY_TTL = 21600
-CURRENT_TTL = 900
 
 
 @dataclass

@@ -32,7 +32,8 @@ class OpenMeteoSource:
         return historical(self.client, city, start, end)
 
     def current(self, city: City) -> tuple[dict, pd.DataFrame]:
-        return current_and_forecast(self.client, city)
+        current, forecast = current_and_forecast(self.client, city)
+        return {**current, "source": "Open-Meteo current model estimate"}, forecast
 
     def close(self) -> None:
         self.client.close()
