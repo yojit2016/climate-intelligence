@@ -4,7 +4,6 @@ Headerless GRD files cannot prove their year, byte order or orientation. These
 must be declared from the source; shape/values and CTL consistency are checked.
 """
 from dataclasses import dataclass
-import re
 
 import numpy as np
 
@@ -43,6 +42,8 @@ HISTORICAL = GridSpec("historical", 31, 1.)
 
 def control_spec(text: str, product: str, byte_order: str) -> GridSpec:
     """Read geometry/UNDEF only; never follow DSET paths or execute CTL text."""
+    if product not in ("historical", "recent") or byte_order not in ("<", ">"):
+        raise IMDFormatError("Choose a supported product and explicit little/big byte order.")
     lines = [line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("*")]
     fields = {}
     for line in lines:
