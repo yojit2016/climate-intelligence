@@ -47,7 +47,8 @@ def test_dashboard_renders_and_filter_submission_changes_city():
         app = AppTest.from_file(APP, default_timeout=60).run()
         assert not app.exception
         assert [tab.label for tab in app.tabs] == ["Overview", "Historical Analysis", "ML Forecasting", "Data Processing"]
-        assert len(app.metric) == 6
+        assert len(app.metric) == 7
+        assert any(item.label == "Most recent available daily maximum" for item in app.metric)
         assert any("What the displayed data shows" in item.value for item in app.markdown)
         assert any("Did the model beat" in item.value for item in app.markdown)
         assert sum(item.label == "How to read this chart" for item in app.expander) == len(app.get("plotly_chart"))

@@ -17,8 +17,8 @@ from climate.panels import patterns_panel, regional_panel, trends_panel
 from climate.service import load_current, load_history
 from climate.style import CSS
 from climate.weather import local_today
-from climate.presentation import chart_story, processing_table
-from climate.storytelling import SECTIONS, peak_observation, point_processing_summary
+from climate.presentation import chart_story, processing_table, processing_overview
+from climate.storytelling import SECTIONS, peak_observation, point_processing_summary, point_before_after
 
 LOGGER = logging.getLogger(__name__)
 cached_history = st.cache_data(ttl=HISTORY_TTL, max_entries=24, show_spinner=False)(load_history)
@@ -161,14 +161,19 @@ def render():
     stats = summary(frame, threshold)
     with overview:
         st.subheader("Your selected historical period")
-        columns = st.columns(4)
+        latest = frame.loc[frame.tmax.notna()].sort_values("date").tail(1)
+        columns = st.columns(5)
         for column, label, value in zip(columns,
-                ["Average daily maximum", "Highest daily maximum", "Lowest daily minimum", "Days above exploratory threshold"],
-                [display_value(stats["mean_max"]), display_value(stats["highest"]),
+                ["Most recent available daily maximum", "Average daily maximum", "Highest daily maximum", "Lowest daily minimum", "Days above exploratory threshold"],
+                [display_value(latest.tmax.iloc[0]) if len(latest) else "Unavailable", display_value(stats["mean_max"]), display_value(stats["highest"]),
                  display_value(stats["lowest"]), str(stats["exceedance_days"]) if stats["valid_days"] else "Unavailable"]):
             column.metric(label, value)
+        st.markdown("**Key Findings**")
         st.write(peak_observation(frame))
+        if len(latest):
+            st.caption(f"Most recent available daily maximum in the selected history: {latest.date.iloc[0]:%d %b %Y}. It may precede the selected period's endpoint when readings are missing.")
         st.caption(f"{stats['valid_days']} valid daily maxima · {stats['missing_days']} missing daily maxima. An average daily maximum describes daytime peaks, not the average temperature across each full day.")
+        st.caption(f"Historical coverage: {start:%d %b %Y} – {end:%d %b %Y}. Exploratory threshold: {threshold:g}°C; not an official warning criterion.")
         if stats["missing_days"]:
             st.info("This period has missing daily maxima. Summaries use available values and cannot establish complete coverage.")
     with historical:
@@ -191,10 +196,12 @@ def render():
     with data:
         st.subheader("Where did this data come from, and what changed?")
         st.caption("This summary describes the historical chart dataset selected in the sidebar. Current conditions, provider forecasts and the model's independent three-year training history are separate products.")
-        processing_table(point_processing_summary(raw, frame, report, smoothing=smoothing, window=window))
+        details = point_processing_summary(raw, frame, report, smoothing=smoothing, window=window)
+        processing_overview(details, point_before_after(raw, frame))
         st.write("Processing: normalize dates to Asia/Kolkata → remove invalid dates and duplicate city-days → replace impossible or inconsistent temperatures with missing values → add missing calendar dates → cache raw and processed tables separately.")
         st.caption("No missing temperatures are filled. Optional smoothing is a chart-only view; the source values and ML inputs remain unchanged. Invalid-row counts describe distinct raw rows; missing counts describe processed values, so these counts are not a partition of acquired rows.")
-        with st.expander("Detailed processing report and source labels"):
+        with st.expander("Advanced Details · Detailed processing report and source labels"):
+            processing_table(details)
             st.json(report)
             st.dataframe(frame.groupby("source").size().rename("Days"), width="stretch")
             st.caption("The original invalid_values_or_rows report counts mixed value/row events, not distinct records. The summary above counts distinct flagged raw records. Historical caches expire after 6 hours; current estimates after 15 minutes.")

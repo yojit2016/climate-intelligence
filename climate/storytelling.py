@@ -113,6 +113,7 @@ def point_processing_summary(raw: pd.DataFrame, frame: pd.DataFrame, report: dic
             "Missing maximum-temperature values": int(frame.tmax.isna().sum()),
             "Missing temperature values (max/min/mean)": int(report["missing_temperature_cells"]),
             "Date coverage": coverage(frame),
+            "Exports available": "Raw API table CSV and processed CSV",
             "Interpolation by this application": "None; gaps remain missing",
             "Smoothing": (f"Enabled for chart only: centered {window}-day Savitzky–Golay filter; no stored or ML values altered"
                           if smoothing else "Signal filter off; trend includes a labeled 7-day rolling mean; no stored or ML values altered")}
@@ -123,10 +124,26 @@ def imd_processing_summary(entry: dict) -> dict:
     return {"Source dataset": f"IMD · {entry['original_filename']}",
             "Data represents": "Station-derived spatially interpolated grid estimates",
             "Records acquired (grid cell-days)": total,
+            "Processed records (grid cell-days)": int(entry["valid_cells"] + entry["missing_cells"]),
             "Valid maximum-temperature records": int(entry["valid_cells"]),
             "Missing maximum-temperature values": int(entry["missing_cells"]),
             "Invalid records retained": "0 — imports with invalid values are rejected in full",
             "Date coverage": f"{entry['start']} – {entry['end']}",
             "Grid resolution": f"{entry['grid']['step']:g}°",
+            "Duplicate removal": "Not applied; complete calendar and grid layout validated",
+            "Exports available": "Complete Parquet, selected-date CSV, cell-series CSV, statistics CSV; differences CSV when enabled",
             "Interpolation by this application": "None; spatial interpolation belongs to the IMD source product",
             "Smoothing": "7-day rolling mean in cell chart only; stored data and ML inputs remain unsmoothed"}
+
+
+def point_before_after(raw: pd.DataFrame, frame: pd.DataFrame) -> pd.DataFrame:
+    return pd.DataFrame({"Measure": ["City-day records", "Non-missing maximum values", "Missing maximum values"],
+        "Before processing": [len(raw), int(raw.tmax.notna().sum()), int(raw.tmax.isna().sum())],
+        "After processing": [len(frame), int(frame.tmax.notna().sum()), int(frame.tmax.isna().sum())]})
+
+
+def imd_before_after(entry: dict) -> pd.DataFrame:
+    total = entry["days"] * entry["grid"]["size"] ** 2
+    return pd.DataFrame({"Measure": ["Grid cell-day records", "Valid maximum values", "Missing cells (sentinel → NaN)"],
+        "Before processing": [total, entry["valid_cells"], entry["missing_cells"]],
+        "After processing": [entry["valid_cells"] + entry["missing_cells"], entry["valid_cells"], entry["missing_cells"]]})

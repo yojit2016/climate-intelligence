@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from climate.processing import clean_daily
-from climate.storytelling import baseline_comparison, group_observation, peak_observation, point_processing_summary, imd_processing_summary, prediction_observation
+from climate.storytelling import baseline_comparison, group_observation, peak_observation, point_processing_summary, imd_processing_summary, prediction_observation, point_before_after, imd_before_after
 
 
 def test_observations_use_available_values_and_handle_empty_groups():
@@ -57,3 +57,15 @@ def test_prediction_observation_reports_real_dates_and_does_not_claim_observatio
     assert "30.00–32.50°C" in text and "02 Jan 2026" in text
     assert "2 prediction dates" in text and "not measured" in text
     assert "No model predictions" in prediction_observation(predictions.assign(prediction=np.nan))
+
+
+def test_before_after_can_preserve_or_increase_records_without_inventing_data():
+    raw = pd.DataFrame({"tmax": [30., np.nan]})
+    processed = pd.DataFrame({"tmax": [30., np.nan, np.nan]})
+    table = point_before_after(raw, processed)
+    assert table["Before processing"].tolist() == [2, 1, 1]
+    assert table["After processing"].tolist() == [3, 1, 2]
+    imd = imd_before_after({"days": 365, "grid": {"size": 31},
+                            "valid_cells": 129552, "missing_cells": 221213})
+    assert imd["Before processing"].tolist() == [350765, 129552, 221213]
+    assert imd["Before processing"].equals(imd["After processing"])
