@@ -9,6 +9,7 @@ import streamlit as st
 from climate.analytics import summary
 from climate.api import WeatherClient, WeatherError
 from climate.locations import CITIES
+from climate.panels import patterns_panel, regional_panel, trends_panel
 from climate.service import load_history
 from climate.weather import current_and_forecast, local_today
 
@@ -97,4 +98,12 @@ def render():
         st.json(report)
         st.dataframe(frame.groupby("source").size().rename("Days"), use_container_width=True)
         st.caption("Raw API tables and processed tables are cached independently under data/. Requests expire after 6 hours; current estimates expire after 15 minutes.")
-    st.dataframe(frame, use_container_width=True, hide_index=True)
+    trends, patterns, regions, data = st.tabs(["Temperature trends", "Monthly & seasonal", "Regional comparison", "Data"])
+    with trends:
+        trends_panel(frame, threshold, smoothing, window)
+    with patterns:
+        patterns_panel(frame)
+    with regions:
+        regional_panel(frame, comparison, start, end, threshold, cached_history)
+    with data:
+        st.dataframe(frame, use_container_width=True, hide_index=True)
