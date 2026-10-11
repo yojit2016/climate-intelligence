@@ -37,14 +37,18 @@ def test_http_failure_and_malformed_json_are_explicit():
         WeatherClient(session).get("https://example.test", {})
 
 
-def test_history_combines_archive_and_recent_completed_days(monkeypatch):
+def test_history_uses_archive_only_even_for_recent_completed_days(monkeypatch):
     monkeypatch.setattr("climate.weather.local_today", lambda city: date(2025, 1, 10))
     client = Mock()
-    client.get.side_effect = [payload(["2025-01-04", "2025-01-05"]),
-                              payload(["2025-01-05", "2025-01-06", "2025-01-07", "2025-01-10"])]
+    client.get.return_value = payload(["2025-01-04", "2025-01-05", "2025-01-06", "2025-01-07"])
     frame = historical(client, CITIES["Delhi"], date(2025, 1, 4), date(2025, 1, 7))
     assert frame.date.dt.day.tolist() == [4, 5, 6, 7]
-    assert frame.source.nunique() == 2
+    assert frame.source.unique().tolist() == ["Historical reanalysis / model estimate"]
+    client.get.assert_called_once()
+    url, parameters = client.get.call_args.args
+    assert url == "https://archive-api.open-meteo.com/v1/archive"
+    assert parameters["start_date"] == "2025-01-04" and parameters["end_date"] == "2025-01-07"
+    assert "past_days" not in parameters
     with pytest.raises(ValueError):
         historical(client, CITIES["Delhi"], date(2025, 1, 4), date(2025, 1, 10))
 

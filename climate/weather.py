@@ -1,5 +1,5 @@
 """Real daily reanalysis and recent model estimates from Open-Meteo."""
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -41,25 +41,10 @@ def historical(client: WeatherClient, city: City, start: date, end: date) -> pd.
     today = local_today(city)
     if start > end or start < date(1940, 1, 1) or end >= today:
         raise ValueError("Choose an ordered historical range from 1940 through yesterday.")
-    # The archive can lag several days. Recent completed days are explicitly
-    # sourced from the forecast endpoint's past-days model output.
-    cutoff = today - timedelta(days=5)
-    parts = []
-    if start <= cutoff:
-        payload = client.get("https://archive-api.open-meteo.com/v1/archive", {
-            **parameters(city), "start_date": start.isoformat(),
-            "end_date": min(end, cutoff).isoformat(), "daily": DAILY})
-        parts.append(parse_daily(payload, city, "Historical reanalysis / model estimate"))
-    if end > cutoff:
-        payload = client.get("https://api.open-meteo.com/v1/forecast", {
-            **parameters(city), "past_days": 5, "forecast_days": 1, "daily": DAILY})
-        recent = parse_daily(payload, city, "Recent model estimate (forecast archive)")
-        dates = recent["date"].dt.date
-        parts.append(recent.loc[(dates >= max(start, cutoff + timedelta(days=1))) & (dates <= end)])
-    frame = pd.concat(parts, ignore_index=True)
-    if frame.empty:
-        raise WeatherError("No historical data available for this range.")
-    return frame
+    payload = client.get("https://archive-api.open-meteo.com/v1/archive", {
+        **parameters(city), "start_date": start.isoformat(),
+        "end_date": end.isoformat(), "daily": DAILY})
+    return parse_daily(payload, city, "Historical reanalysis / model estimate")
 
 
 def current_and_forecast(client: WeatherClient, city: City) -> tuple[dict, pd.DataFrame]:
