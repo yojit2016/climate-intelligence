@@ -71,7 +71,8 @@ must be obtained/exported using a documented supported format first.
 
 ## Import and validation
 
-1. Start the app and choose **IMD gridded temperature** under **Data workspace**.
+1. Start the app, choose **IMD gridded temperature** under **Data workspace**,
+   then open **Data Processing**.
 2. Select the annual historical or recent daily product.
 3. Declare the year/product date and byte order. Annual imports require a
    completed year from 1951 onward; incomplete current-year files are rejected.
@@ -141,7 +142,7 @@ calendar-day maximum. Imported metadata records the original filename, source
 product, date coverage, byte order, orientation convention, valid/missing counts,
 temperature extrema, content hash and import timestamp.
 
-Download the complete long-format Parquet in **IMD exports & provenance**. The map
+Download the complete long-format Parquet in **Data Processing**. The map
 exports the selected date as CSV; the analytics panel exports the selected cell
 series as CSV. Missing temperatures remain blank. Parquet reads use date/cell
 filters so normal exploration does not load all imported years into memory.
@@ -183,7 +184,8 @@ chronological purged splits, validation selection, held-out MAE/RMSE and
 persistence comparison. Tmax-only imports contain no daily minimum or daily mean;
 those remain missing rather than being estimated from Tmax.
 
-Model evaluation is optional. Predictions follow the imported history endpoint,
+Model evaluation is optional in **ML Forecasting**, using the cell selected in
+**Historical Analysis**. Predictions follow the imported history endpoint,
 usually an old year-end, and are prominently labeled a **historical endpoint
 experiment**, not live city forecasts. There are no Open-Meteo inputs in these
 models. Targets are IMD spatially interpolated, station-derived grid estimates,

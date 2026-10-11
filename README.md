@@ -53,9 +53,22 @@ cities**, then evaluates and trains the selected city's local models. It needs a
 internet connection; the public noncommercial API needs no key. Choose cities,
 dates, an exploratory threshold and smoothing settings in the sidebar, then
 select **Apply filters**. Chart filters do not shorten or otherwise change the
-automatic three-year training dataset. Use the five tabs for trends, seasonal
-patterns, regional comparisons, ML predictions and CSV downloads. The current
-conditions section includes a separate expandable provider forecast. Dates use Asia/Kolkata.
+automatic three-year training dataset. Both data workspaces use four sections:
+
+- **Overview:** current Open-Meteo estimates and historical summary, or coverage
+  and extremes of the selected imported IMD file.
+- **Historical Analysis:** daily trends, monthly/seasonal patterns and city
+  comparisons for Open-Meteo; geographic date maps and 1° cell analysis for IMD.
+- **ML Forecasting:** upcoming Open-Meteo-based predictions when history is fresh,
+  or explicitly labeled IMD historical endpoint experiments.
+- **Data Processing:** actual record/missing/quality counts, processing steps,
+  source interpretation, detailed reports, exports and IMD imports.
+
+Each major chart includes units, source, date coverage, a calculated observation
+and an optional **How to read this chart** guide. Technical methodology remains
+available in expanders. The current conditions section includes a separate
+expandable provider forecast. Dates use Asia/Kolkata. See the
+[dashboard reading guide](docs/DASHBOARD_GUIDE.md) for interpretation and limits.
 Requests are limited to ten years each to bound download and training costs.
 
 **Refresh weather data** immediately bypasses the on-disk caches for current
@@ -174,7 +187,7 @@ shows each city's available maximum-temperature count and explicit download erro
 partial failures can be retried with the refresh button. Failed refresh requests
 leave existing files intact but do not silently return them as fresh data.
 
-The Data tab downloads both raw and processed CSV tables. Exports retain city,
+The Data Processing section downloads both raw and processed CSV tables. Exports retain city,
 source, retrieval timestamp and timezone offsets; missing values remain blank.
 Generated datasets, logs, virtual environments, secrets and model artifacts are
 excluded from Git. No remote is configured by this project.
