@@ -37,7 +37,7 @@ def import_form(store: IMDStore):
             year, day = None, None
             if kind == "historical":
                 year = int(st.number_input("File calendar year", min_value=1951, max_value=today.year - 1,
-                                           value=min(2024, today.year - 1), step=1))
+                                           value=today.year - 1, step=1))
             else:
                 day = st.date_input("IMD product date", value=today, max_value=today)
             byte_order = st.selectbox("Declared file byte order", ["Little endian", "Big endian"])
@@ -77,15 +77,29 @@ def cell_panel(store: IMDStore, entries: list[dict]):
     selected = st.multiselect("Historical annual datasets (one version per year)", list(labels),
                               default=[annual[-1]["id"]], format_func=labels.get)
     city = CITIES[st.selectbox("City location reference", list(CITIES), index=1)]
-    left, right = st.columns(2)
-    latitude = left.select_slider("Grid latitude (°N)", options=HISTORICAL.latitudes.tolist(),
-                                  value=float(HISTORICAL.latitudes[np.argmin(abs(HISTORICAL.latitudes - city.latitude))]))
-    longitude = right.select_slider("Grid longitude (°E)", options=HISTORICAL.longitudes.tolist(),
-                                    value=float(HISTORICAL.longitudes[np.argmin(abs(HISTORICAL.longitudes - city.longitude))]))
-    st.caption(f"Analyzing the actual {latitude:g}°N, {longitude:g}°E grid cell. City names are location references; these are spatially interpolated gridded values, not measurements at city stations. No Open-Meteo data or recent 0.5° cells are appended.")
     if not selected:
         st.info("Select at least one historical dataset.")
         return
+    mode = st.radio("Grid-cell selection", ["Nearest available to location", "Exact grid coordinate"], horizontal=True)
+    left, right = st.columns(2)
+    if mode.startswith("Nearest"):
+        query_lat = left.number_input("Location latitude (°N)", min_value=7.5, max_value=37.5,
+                                      value=city.latitude, format="%.4f", key=f"imd_query_lat_{city.name}")
+        query_lon = right.number_input("Location longitude (°E)", min_value=67.5, max_value=97.5,
+                                       value=city.longitude, format="%.4f", key=f"imd_query_lon_{city.name}")
+        try:
+            nearest = store.nearest_historical_cell(selected, query_lat, query_lon)
+        except (ValueError, OSError) as exc:
+            st.error(str(exc))
+            return
+        latitude, longitude = nearest.latitude, nearest.longitude
+        st.caption(f"Nearest available 1° cell: {latitude:g}°N, {longitude:g}°E · {nearest.distance_km:.1f} km from the requested location · {nearest.valid_days} valid dates. Availability means at least one reading in the selected history; missing dates remain missing.")
+    else:
+        latitude = left.select_slider("Grid latitude (°N)", options=HISTORICAL.latitudes.tolist(),
+                                      value=float(HISTORICAL.latitudes[np.argmin(abs(HISTORICAL.latitudes - city.latitude))]))
+        longitude = right.select_slider("Grid longitude (°E)", options=HISTORICAL.longitudes.tolist(),
+                                        value=float(HISTORICAL.longitudes[np.argmin(abs(HISTORICAL.longitudes - city.longitude))]))
+    st.caption(f"Analyzing the actual 1° resolution cell at {latitude:g}°N, {longitude:g}°E. City names are location references; these are spatially interpolated gridded values, not measurements at city stations. No Open-Meteo data or recent 0.5° cells are appended.")
     try:
         frame = store.historical_cell(selected, latitude, longitude)
     except (ValueError, OSError) as exc:
@@ -101,6 +115,8 @@ def cell_panel(store: IMDStore, entries: list[dict]):
     columns[1].metric("Highest cell maximum", f"{stats['highest']:.1f} °C" if pd.notna(stats["highest"]) else "Unavailable")
     columns[2].metric("Exploratory exceedance days", stats["exceedance_days"])
     st.plotly_chart(trend_chart(daily_trends(frame, threshold), threshold), width="stretch")
+    with st.expander("Daily grid-cell maximum temperatures"):
+        st.dataframe(frame[["date", "tmax", "latitude", "longitude", "source"]], hide_index=True, width="stretch")
     monthly, seasonal = monthly_patterns(frame), seasonal_patterns(frame)
     st.plotly_chart(finish(px.bar(monthly, x="month", y="mean_max"), "IMD grid-cell monthly mean maximum"), width="stretch")
     st.dataframe(seasonal[["season", "mean_max", "highest", "valid_days"]], hide_index=True, width="stretch")
@@ -151,14 +167,27 @@ def render_imd():
     map_tab, analytics_tab, export_tab = st.tabs(["India grid map", "Grid-cell analytics & ML", "IMD exports & provenance"])
     with map_tab:
         first, last = date.fromisoformat(entry["start"]), date.fromisoformat(entry["end"])
+        st.caption(f"Imported product coverage: {first:%d %b %Y} through {last:%d %b %Y}. This imported file is not a live observation stream.")
         selected_date = st.date_input("Grid product date", value=first, min_value=first, max_value=last, key=f"imd_date_{identity}")
         try:
             daily = store.day(identity, selected_date)
+            valid = daily.maximum_temperature_c.dropna()
+            columns = st.columns(3)
+            columns[0].metric("Available cells on selected date", f"{len(valid)} / {len(daily)}")
+            columns[1].metric("Lowest available Tmax", f"{valid.min():.2f} °C" if len(valid) else "Unavailable")
+            columns[2].metric("Highest available Tmax", f"{valid.max():.2f} °C" if len(valid) else "Unavailable")
             figure = grid_heatmap(daily, f"IMD {entry['grid']['step']:g}° Tmax · {selected_date:%d %b %Y}",
                                   entry["minimum_c"], entry["maximum_c"])
             st.plotly_chart(figure, width="stretch")
             st.caption("Longitude/latitude heatmap of the IMD India grid domain. Missing cells are blank; no spatial interpolation or political boundary mask is added. Colors use the imported dataset's full temperature range for consistent date comparisons. City markers are location references only.")
             st.download_button("Download selected IMD date CSV", csv_bytes(daily), f"imd_tmax_{selected_date}.csv", "text/csv")
+            with st.expander("Daily, monthly and seasonal grid statistics"):
+                st.caption("Unweighted summaries of available grid cell-days in this file, not an area-weighted India average. Minimum Tmax is the lowest daily maximum, not a nighttime minimum. Missing cells are excluded from temperatures and counted separately. Seasons are grouped within calendar year; December remains in its file year.")
+                for name, table in store.statistics(identity).items():
+                    st.markdown(f"**{name.title()}**")
+                    st.dataframe(table, hide_index=True, width="stretch")
+                    st.download_button(f"Download {name} IMD statistics CSV", csv_bytes(table),
+                                       f"imd_{entry['start']}_{name}_statistics.csv", "text/csv")
         except (ValueError, OSError) as exc:
             st.warning(f"IMD date unavailable: {exc}")
     with analytics_tab:

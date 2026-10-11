@@ -5,12 +5,15 @@ No substitute fixture is used when the file is absent from another checkout.
 from datetime import date
 from pathlib import Path
 import struct
+from unittest.mock import patch
 
 import numpy as np
 import pytest
+from streamlit.testing.v1 import AppTest
 
 from climate.imd_parser import parse_grd
 from climate.imd_store import IMDStore
+from climate.imd_charts import grid_heatmap
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -61,3 +64,42 @@ def test_actual_2025_parquet_round_trip(actual_2025, tmp_path):
         expected = parsed.frame[parsed.frame.date.dt.date == selected].reset_index(drop=True)
         assert daily.reset_index(drop=True).equals(expected)
     assert store.historical_cell([identity], 28.5, 77.5).tmax.notna().sum() == 365
+
+
+def test_actual_2025_statistics_heatmap_and_nearest_available(actual_2025, tmp_path):
+    payload, parsed = actual_2025
+    store = IMDStore(tmp_path)
+    identity = store.save(parsed, payload, "Maxtemp_MaxT_2025.GRD")
+    tables = store.statistics(identity)
+    assert [len(tables[key]) for key in ("daily", "monthly", "seasonal")] == [365, 12, 4]
+    for table in tables.values():
+        assert table.valid_cell_days.sum() == 129_552
+        assert table.missing_cell_days.sum() == 221_213
+    nearest = store.nearest_historical_cell([identity], 28.6139, 77.2090)
+    assert (nearest.latitude, nearest.longitude, nearest.valid_days) == (28.5, 77.5, 365)
+    assert 0 < nearest.distance_km < 35
+    # The southwest corner is missing in this real file; availability lookup must skip it.
+    masked = store.nearest_historical_cell([identity], 7.5, 67.5)
+    assert (masked.latitude, masked.longitude) != (7.5, 67.5) and masked.valid_days > 0
+    day = store.day(identity, date(2025, 4, 15))
+    chart = grid_heatmap(day, "Actual IMD 2025", parsed.metadata["minimum_c"], parsed.metadata["maximum_c"])
+    np.testing.assert_equal(np.asarray(chart.data[0].z), parsed.cube().maximum_temperature_c[104])
+
+
+def test_actual_2025_dashboard_date_statistics_location_and_model(actual_2025, tmp_path):
+    payload, parsed = actual_2025
+    store = IMDStore(tmp_path)
+    store.save(parsed, payload, "Maxtemp_MaxT_2025.GRD")
+    with patch("climate.imd_ui.IMDStore", return_value=store):
+        app = AppTest.from_string("from climate.imd_ui import render_imd\nrender_imd()", default_timeout=60).run()
+        assert not app.exception
+        assert any("Nearest available 1° cell" in caption.value for caption in app.caption)
+        assert len(app.get("plotly_chart")) == 3
+        next(item for item in app.date_input if item.label == "Grid product date").set_value(date(2025, 5, 15)).run()
+        assert not app.exception
+        next(item for item in app.checkbox if item.label.startswith("Evaluate Random Forest")).check().run()
+        assert not app.exception
+        assert len(app.get("plotly_chart")) == 5
+        assert any("31 Dec 2025" in item.value for item in app.warning)
+        next(item for item in app.radio if item.label == "Grid-cell selection").set_value("Exact grid coordinate").run()
+        assert not app.exception
