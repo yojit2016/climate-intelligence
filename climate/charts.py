@@ -43,3 +43,37 @@ def smoothing_chart(frame: pd.DataFrame) -> go.Figure:
     for trace in fig.data:
         trace.name = {"tmax": "Raw maximum", "smoothed": "Smoothed maximum"}[trace.name]
     return finish(fig, "Raw and smoothed daily maximum")
+
+
+def pattern_chart(frame: pd.DataFrame, category: str, title: str) -> go.Figure:
+    fig = px.bar(frame, x=category, y=["mean_max", "mean_min"], barmode="group",
+                 color_discrete_sequence=[COLORS[0], COLORS[2]])
+    for trace in fig.data:
+        trace.name = {"mean_max": "Mean maximum", "mean_min": "Mean minimum"}[trace.name]
+    return finish(fig, title)
+
+
+def comparison_chart(frame: pd.DataFrame) -> go.Figure:
+    fig = px.line(frame.sort_values(["city", "date"]), x="date", y="tmax", color="city",
+                  color_discrete_sequence=COLORS, labels={"city": "City"})
+    return finish(fig, "Regional daily maxima · shared date range")
+
+
+def prediction_chart(history: pd.DataFrame, predictions: pd.DataFrame) -> go.Figure:
+    fig = go.Figure()
+    recent = history.tail(21)
+    fig.add_scatter(x=recent.date, y=recent.tmax, name="Historical model estimates", line=dict(color=COLORS[0]))
+    fig.add_scatter(x=predictions.date, y=predictions.prediction, name="Local Random Forest prediction",
+                    mode="lines+markers", line=dict(color=COLORS[2], dash="dash"))
+    fig.add_scatter(x=predictions.date, y=predictions.baseline, name="Persistence baseline",
+                    mode="lines+markers", line=dict(color="#9aa1a9", dash="dot"))
+    return finish(fig, "Local ML model · three direct prediction horizons")
+
+
+def evaluation_chart(test: pd.DataFrame) -> go.Figure:
+    first = test.loc[test.horizon == 1]
+    fig = px.line(first, x="date", y=["actual", "prediction", "baseline"], color_discrete_sequence=COLORS)
+    for trace in fig.data:
+        trace.name = {"actual": "Held-out reanalysis/model target", "prediction": "Random Forest",
+                      "baseline": "Persistence"}[trace.name]
+    return finish(fig, "Held-out test period · day-one predictions")
