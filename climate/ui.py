@@ -13,6 +13,7 @@ from climate.export import csv_bytes
 from climate.locations import CITIES
 from climate.panels import patterns_panel, regional_panel, trends_panel
 from climate.service import load_history
+from climate.style import CSS
 from climate.weather import current_and_forecast, local_today
 
 LOGGER = logging.getLogger(__name__)
@@ -76,6 +77,7 @@ def current_cards(city: str):
 
 def render():
     st.set_page_config(page_title="Climate Intelligence", layout="wide")
+    st.markdown(CSS, unsafe_allow_html=True)
     city, start, end, threshold, smoothing, window, comparison = filters()
     st.title("Heatwave analytics")
     st.caption(f"{city} · {start:%d %b %Y} — {end:%d %b %Y} · All temperatures in °C")
