@@ -14,6 +14,7 @@ from streamlit.testing.v1 import AppTest
 from climate.imd_parser import parse_grd
 from climate.imd_store import IMDStore
 from climate.imd_charts import grid_heatmap
+from climate.imd_analysis import hottest_cells, compare_dates
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -103,3 +104,15 @@ def test_actual_2025_dashboard_date_statistics_location_and_model(actual_2025, t
         assert any("31 Dec 2025" in item.value for item in app.warning)
         next(item for item in app.radio if item.label == "Grid-cell selection").set_value("Exact grid coordinate").run()
         assert not app.exception
+
+
+def test_actual_2025_rankings_and_differences_match_raw_temperature_cube(actual_2025):
+    _, parsed = actual_2025
+    first = parsed.frame.loc[parsed.frame.date.dt.dayofyear == 1]
+    second = parsed.frame.loc[parsed.frame.date.dt.dayofyear == 180]
+    ranked = hottest_cells(first)
+    assert len(ranked) == 5 and ranked.maximum_temperature_c.is_monotonic_decreasing
+    assert ranked.maximum_temperature_c.iloc[0] == first.maximum_temperature_c.max()
+    compared = compare_dates(first, second)
+    cube = parsed.cube().maximum_temperature_c
+    np.testing.assert_equal(compared.difference_c.to_numpy().reshape(31, 31), cube[179] - cube[0])

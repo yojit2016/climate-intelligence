@@ -44,6 +44,15 @@ def test_imported_imd_workspace_maps_dates_and_evaluates_grid_cell(tmp_path):
         assert sum(item.label == "How to read this chart" for item in app.expander) == len(app.get("plotly_chart"))
         app.date_input[0].set_value(date(2025, 7, 1)).run()
         assert not app.exception
+        next(item for item in app.checkbox if item.label == "Enable date comparison").check().run()
+        assert not app.exception
+        assert len(app.get("plotly_chart")) == 6
+        next(item for item in app.date_input if item.label == "Date B").set_value(date(2025, 1, 1)).run()
+        assert not app.exception
+        assert any("B minus A" in item.value for item in app.markdown)
+        assert any(item.label == "Download IMD date differences CSV" for item in app.get("download_button"))
+        next(item for item in app.checkbox if item.label == "Enable date comparison").uncheck().run()
+        assert not app.exception
         next(item for item in app.checkbox if item.label.startswith("Evaluate Random Forest")).check().run()
         assert not app.exception
         assert any("Historical endpoint experiment" in warning.value for warning in app.warning)

@@ -11,14 +11,15 @@ from climate.analytics import daily_trends, monthly_patterns, seasonal_patterns,
 from climate.charts import evaluation_chart, finish, prediction_chart, trend_chart
 from climate.evaluation import ModelUnavailable
 from climate.export import csv_bytes
-from climate.imd_charts import grid_heatmap
+from climate.imd_charts import grid_heatmap, difference_heatmap
+from climate.imd_analysis import hottest_cells, compare_dates, difference_findings
 from climate.imd_format import HISTORICAL, HISTORICAL_URL, RECENT_URL
 from climate.imd_parser import parse_grd
 from climate.imd_store import IMDStore
 from climate.locations import CITIES
 from climate.model import train_and_predict
-from climate.presentation import chart_story, processing_table, model_intro, evaluation_story
-from climate.storytelling import SECTIONS, peak_observation, group_observation, prediction_observation, baseline_comparison, sources, imd_processing_summary, forecast_table
+from climate.presentation import chart_story, processing_table, processing_overview, model_intro, evaluation_story
+from climate.storytelling import SECTIONS, peak_observation, group_observation, prediction_observation, baseline_comparison, sources, imd_processing_summary, imd_before_after, forecast_table
 
 LOGGER = logging.getLogger(__name__)
 
@@ -169,6 +170,41 @@ def cell_model_panel(frame):
         st.dataframe(result.splits, hide_index=True, width="stretch")
 
 
+def date_comparison_panel(store, identity, entry, daily, selected_date, first, last):
+    with st.expander("Compare two IMD dates"):
+        if not st.checkbox("Enable date comparison", key=f"imd_compare_{identity}"):
+            st.caption("Compare maximum temperatures on two product dates from this same dataset. No long-term climate trend is inferred.")
+            return
+        st.caption(f"Date A is the selected grid product date above: {selected_date:%d %b %Y}. Differences are Date B minus Date A.")
+        second_date = st.date_input("Date B", value=min(selected_date + pd.Timedelta(days=1), last),
+                                    min_value=first, max_value=last, key=f"imd_date_b_{identity}")
+        try:
+            second = store.day(identity, second_date)
+            compared = compare_dates(daily, second)
+            for column, frame, name, stamp in zip(st.columns(2), [daily, second], ["A", "B"], [selected_date, second_date]):
+                with column:
+                    if not frame.maximum_temperature_c.notna().any():
+                        st.info(f"Date {name} has no available temperatures; its map is blank.")
+                        continue
+                    st.plotly_chart(grid_heatmap(frame, f"Date {name} · {stamp:%d %b %Y}",
+                        entry["minimum_c"], entry["maximum_c"], height=500), width="stretch")
+                    chart_story(frame, "Daily maximum at original IMD grid coordinates.",
+                        peak_observation(frame, "maximum_temperature_c"),
+                        "Both temperature maps use the same dataset-wide color limits. Grey/blank cells have no reading; no resampling or interpolation is applied.")
+            finding = difference_findings(compared)
+            if compared.difference_c.notna().any():
+                st.plotly_chart(difference_heatmap(compared), width="stretch")
+                chart_story(pd.DataFrame({"date": [pd.Timestamp(selected_date), pd.Timestamp(second_date)]}),
+                    "Change in gridded daily maximum temperature: Date B minus Date A at cells valid on both dates.",
+                    finding, "Red means a higher daily maximum on B; blue means lower; the scale is symmetric around zero. Grey/blank cells are unavailable on at least one date. A two-date change is not measured long-term climate change.", source=sources(daily))
+            else:
+                st.info(finding)
+            st.download_button("Download IMD date differences CSV", csv_bytes(compared),
+                f"imd_difference_{selected_date}_{second_date}.csv", "text/csv")
+        except (ValueError, OSError) as exc:
+            st.warning(f"Date comparison unavailable: {exc}")
+
+
 def render_imd():
     st.title("Climate Intelligence")
     st.caption("IMD · official station-derived temperature grids. Imported product dates are historical/static data, not a live observation stream. Open-Meteo remains a separate workspace.")
@@ -189,31 +225,44 @@ def render_imd():
         with processing:
             import_form(store)
         return
-    labels = {entry["id"]: f"{entry['grid']['product']} · {entry['start']} — {entry['end']} · {entry['original_filename']} · {entry['id'][:8]}" for entry in entries}
+    labels = {entry["id"]: f"{entry['original_filename']} · {entry['start']} — {entry['end']} · {entry['grid']['step']:g}°" for entry in entries}
     identity = st.selectbox("Imported IMD dataset", list(labels), format_func=labels.get, key="imd_dataset")
     entry = next(item for item in entries if item["id"] == identity)
+    first, last = date.fromisoformat(entry["start"]), date.fromisoformat(entry["end"])
+    selected_date = st.date_input("Grid product date", value=first, min_value=first, max_value=last, key=f"imd_date_{identity}")
+    daily = None
+    try:
+        daily = store.day(identity, selected_date)
+        rankings = hottest_cells(daily)
+    except (ValueError, OSError) as exc:
+        daily = None
+        st.warning(f"IMD date unavailable: {exc}")
     overview, historical, model, processing = st.tabs(SECTIONS)
     with overview:
         st.subheader("What does this imported temperature dataset show?")
         st.caption(f"Source: IMD · {entry['original_filename']} · {entry['start']} – {entry['end']} · {entry['grid']['step']:g}° spatial resolution")
-        columns = st.columns(3)
-        columns[0].metric("Valid maximum-temperature readings", f"{entry['valid_cells']:,}")
-        columns[1].metric("Missing readings", f"{entry['missing_cells']:,}")
-        columns[2].metric("Highest available daily maximum", f"{entry['maximum_c']:.2f} °C")
-        st.write(f"The imported file contains {entry['days']} daily grids. Valid daily maxima range from {entry['minimum_c']:.2f} to {entry['maximum_c']:.2f}°C across available cells.")
+        st.caption(f"Selected product date: {selected_date:%d %b %Y} · IMD static import, not live observations")
+        if daily is not None:
+            valid = daily.maximum_temperature_c.dropna()
+            columns = st.columns(3)
+            columns[0].metric("Valid grid cells on selected date", f"{len(valid):,} / {len(daily):,}")
+            columns[1].metric("Lowest grid-cell daily maximum", f"{valid.min():.2f} °C" if len(valid) else "Unavailable")
+            columns[2].metric("Highest grid-cell daily maximum", f"{valid.max():.2f} °C" if len(valid) else "Unavailable")
+            st.markdown("**Key Findings**")
+            st.write(peak_observation(daily, "maximum_temperature_c"))
+            if not rankings.empty:
+                hottest = rankings.iloc[0]
+                st.caption(f"Hottest valid grid coordinate: {hottest.latitude:g}°N, {hottest.longitude:g}°E. Coordinates describe a {entry['grid']['step']:g}° grid cell, not an exact city measurement; equal hottest values may occur at other cells.")
+        else:
+            st.info("Choose an available date to see grid-cell findings.")
+        st.caption(f"Whole-file coverage: {entry['days']} daily grids · {entry['valid_cells']:,} valid cell-days · {entry['missing_cells']:,} missing cell-days.")
         st.caption("Missing cells do not mean zero temperature. IMD interpolates station information onto a regular grid; every coordinate is not an independent observation. These extremes describe the imported grid domain, not an area-weighted India average.")
     with historical:
         st.subheader("How do temperatures vary across the grid?")
-        first, last = date.fromisoformat(entry["start"]), date.fromisoformat(entry["end"])
         st.caption(f"Imported product coverage: {first:%d %b %Y} through {last:%d %b %Y}. This imported file is not a live observation stream.")
-        selected_date = st.date_input("Grid product date", value=first, min_value=first, max_value=last, key=f"imd_date_{identity}")
         try:
-            daily = store.day(identity, selected_date)
-            valid = daily.maximum_temperature_c.dropna()
-            columns = st.columns(3)
-            columns[0].metric("Available cells on selected date", f"{len(valid)} / {len(daily)}")
-            columns[1].metric("Lowest available Tmax", f"{valid.min():.2f} °C" if len(valid) else "Unavailable")
-            columns[2].metric("Highest available Tmax", f"{valid.max():.2f} °C" if len(valid) else "Unavailable")
+            if daily is None:
+                raise ValueError("No grid table is available for the selected date.")
             figure = grid_heatmap(daily, f"IMD {entry['grid']['step']:g}° Tmax · {selected_date:%d %b %Y}",
                                   entry["minimum_c"], entry["maximum_c"])
             st.plotly_chart(figure, width="stretch")
@@ -221,6 +270,14 @@ def render_imd():
                         peak_observation(daily, "maximum_temperature_c"),
                         "Longitude runs west to east; latitude runs south to north. Blank cells have missing data. The color scale stays fixed to this dataset's range so dates can be compared. No extra interpolation or political boundary mask is applied; city dots are location references only.")
             st.download_button("Download selected IMD date CSV", csv_bytes(daily), f"imd_tmax_{selected_date}.csv", "text/csv")
+            st.markdown("**Hottest Locations · top 5 valid grid cells**")
+            displayed = rankings.drop(columns="data_source").copy()
+            displayed["date"] = displayed.date.dt.strftime("%d %b %Y")
+            st.dataframe(displayed.rename(columns={"rank": "Rank", "latitude": "Latitude (°N)",
+                "longitude": "Longitude (°E)", "maximum_temperature_c": "Maximum (°C)", "date": "Product date"}),
+                hide_index=True, width="stretch")
+            st.caption(f"Original {entry['grid']['step']:g}° grid cells, not station or exact city readings. Grey/blank map cells are missing; ties are ordered by latitude then longitude.")
+            date_comparison_panel(store, identity, entry, daily, selected_date, first, last)
             with st.expander("Daily, monthly and seasonal grid statistics"):
                 st.caption("Unweighted summaries of available grid cell-days in this file, not an area-weighted India average. Minimum Tmax is the lowest daily maximum, not a nighttime minimum. Missing cells are excluded from temperatures and counted separately. Seasons are grouped within calendar year; December remains in its file year.")
                 for name, table in store.statistics(identity).items():
@@ -239,11 +296,13 @@ def render_imd():
             st.info("Select a historical annual dataset and a grid cell with valid temperatures in Historical Analysis to evaluate the model.")
     with processing:
         st.subheader("Where did this data come from, and what changed?")
-        processing_table(imd_processing_summary(entry))
+        details = imd_processing_summary(entry)
+        processing_overview(details, imd_before_after(entry))
         st.write("Processing: check binary size and calendar → validate declared grid and byte order → decode float32 values → replace IMD's missing sentinel with NaN → reject invalid files → map cells to date/latitude/longitude → preserve raw GRD and cache a separate Parquet table.")
-        st.caption("Missing cell-days remain in the table; none are filled. The trend's rolling mean is a separate labeled visual summary. The source grid is already spatially interpolated by IMD; this app performs no additional spatial interpolation.")
+        st.caption("Missing cells can reflect areas without coverage inside the rectangular geographic domain. They remain missing, not zero. IMD's source grid is spatially interpolated; this app adds no spatial interpolation.")
         import_form(store)
-        with st.expander("Detailed file metadata and validation"):
+        with st.expander("Advanced Details · file metadata and validation"):
+            processing_table(details)
             st.json(entry)
         st.download_button("Download complete IMD dataset Parquet", store.parquet_path(identity).read_bytes(),
                            f"imd_{entry['grid']['product']}_{entry['start']}.parquet", "application/octet-stream")
