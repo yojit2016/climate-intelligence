@@ -1,0 +1,45 @@
+"""Plotly figures with explicit units, legends and source-neutral styling."""
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+
+COLORS = ["#34495e", "#b35b45", "#467a77", "#827191", "#a0884b", "#687d94"]
+
+
+def finish(fig: go.Figure, title: str, y: str = "Temperature (°C)") -> go.Figure:
+    fig.update_layout(template="plotly_white", title=title, height=350,
+        font=dict(family="Arial, sans-serif", color="#30363d", size=12),
+        margin=dict(l=16, r=16, t=50, b=16), paper_bgcolor="white",
+        legend=dict(orientation="h", y=-.22), hovermode="x unified")
+    fig.update_yaxes(title=y, gridcolor="#edf0f2")
+    fig.update_xaxes(title=None, showgrid=False)
+    fig.update_traces(connectgaps=False, selector=dict(type="scatter"))
+    return fig
+
+
+def trend_chart(frame: pd.DataFrame, threshold: float) -> go.Figure:
+    fig = go.Figure()
+    fig.add_scatter(x=frame.date, y=frame.tmax, name="Daily maximum", line=dict(color=COLORS[0], width=1.5))
+    fig.add_scatter(x=frame.date, y=frame.rolling_7d, name="7-day rolling mean", line=dict(color=COLORS[2], width=2))
+    exceeds = frame.loc[frame.exceeds_threshold]
+    fig.add_scatter(x=exceeds.date, y=exceeds.tmax, mode="markers", name="Exploratory exceedance",
+                    marker=dict(color=COLORS[1], size=5))
+    fig.add_hline(y=threshold, line_dash="dot", line_color=COLORS[1],
+                  annotation_text=f"Exploratory threshold: {threshold:g} °C")
+    return finish(fig, "Daily maximum temperature")
+
+
+def range_chart(frame: pd.DataFrame) -> go.Figure:
+    fig = px.line(frame, x="date", y=["tmax", "tmin", "tmean"], color_discrete_sequence=COLORS,
+                  labels={"variable": "Daily statistic", "value": "Temperature (°C)"})
+    names = {"tmax": "Maximum", "tmin": "Minimum", "tmean": "Mean"}
+    for trace in fig.data:
+        trace.name = names[trace.name]
+    return finish(fig, "Daily maximum, minimum and mean")
+
+
+def smoothing_chart(frame: pd.DataFrame) -> go.Figure:
+    fig = px.line(frame, x="date", y=["tmax", "smoothed"], color_discrete_sequence=["#b8bec5", COLORS[0]])
+    for trace in fig.data:
+        trace.name = {"tmax": "Raw maximum", "smoothed": "Smoothed maximum"}[trace.name]
+    return finish(fig, "Raw and smoothed daily maximum")
