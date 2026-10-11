@@ -47,6 +47,24 @@ def prediction_observation(predictions: pd.DataFrame) -> str:
     return f"Across these {len(valid)} prediction dates, the model estimates {valid.prediction.min():.2f}–{valid.prediction.max():.2f}°C, with the highest on {highest.date:%d %b %Y}. These are predictions, not measured temperatures."
 
 
+def forecast_table(history: pd.DataFrame, predictions: pd.DataFrame) -> pd.DataFrame:
+    table = predictions[["date", "horizon", "prediction", "baseline"]].copy()
+    table["Historical input endpoint"] = history.date.max()
+    return table.rename(columns={"date": "Forecast date", "horizon": "Days after endpoint",
+        "prediction": "Predicted maximum (°C)", "baseline": "Persistence maximum (°C)"})
+
+
+def mae_summary(metrics: pd.DataFrame) -> pd.DataFrame:
+    comparison, _ = baseline_comparison(metrics)
+    if comparison.empty:
+        return pd.DataFrame()
+    table = comparison.loc[comparison["Error measure"] == "MAE"].drop(columns=["Error measure"]).copy()
+    table["MAE change: RF − persistence (°C)"] = table["Random Forest (°C)"] - table["Persistence (°C)"]
+    table["Result"] = table.Result.map({"Random Forest lower": "Random Forest improved",
+        "Persistence lower": "Random Forest worse", "Equal": "Equal performance"})
+    return table
+
+
 def baseline_comparison(metrics: pd.DataFrame) -> tuple[pd.DataFrame, str]:
     """Compare both errors per held-out horizon, without averaging away failures."""
     test = metrics.loc[metrics.partition == "Test"]

@@ -2,7 +2,7 @@
 import pandas as pd
 import streamlit as st
 
-from climate.storytelling import baseline_comparison, coverage, sources
+from climate.storytelling import baseline_comparison, coverage, sources, mae_summary
 
 
 def chart_story(frame, explanation, observation, how_to_read, *, source=None):
@@ -31,7 +31,13 @@ def evaluation_story(result):
     st.write("MAE is the average size of a prediction error, in °C. RMSE is also in °C, but gives larger errors more weight. Lower values are better for both.")
     table, conclusion = baseline_comparison(result.metrics)
     st.markdown(f"**Did the model beat the simple baseline?** {conclusion}")
+    st.markdown("**Model Performance Summary · test MAE**")
+    summary = mae_summary(result.metrics)
+    if not summary.empty:
+        st.dataframe(summary.round(3), hide_index=True, width="stretch")
+        st.caption("MAE change = Random Forest minus persistence: negative is an improvement; positive means Random Forest performed worse. Results are separate for each number of days ahead.")
     if not table.empty:
-        st.dataframe(table.round(3), hide_index=True, width="stretch")
+        with st.expander("Compare MAE and RMSE at every horizon"):
+            st.dataframe(table.round(3), hide_index=True, width="stretch")
     with st.expander("Full validation and test metrics"):
         st.dataframe(result.metrics, hide_index=True, width="stretch")

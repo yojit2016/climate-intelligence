@@ -18,7 +18,7 @@ from climate.imd_store import IMDStore
 from climate.locations import CITIES
 from climate.model import train_and_predict
 from climate.presentation import chart_story, processing_table, model_intro, evaluation_story
-from climate.storytelling import SECTIONS, peak_observation, group_observation, prediction_observation, baseline_comparison, sources, imd_processing_summary
+from climate.storytelling import SECTIONS, peak_observation, group_observation, prediction_observation, baseline_comparison, sources, imd_processing_summary, forecast_table
 
 LOGGER = logging.getLogger(__name__)
 
@@ -155,7 +155,7 @@ def cell_model_panel(frame):
     shown = pd.concat([frame.tail(21)[["date"]], result.predictions[["date"]]], ignore_index=True)
     chart_story(shown, "The model estimates three dates immediately after this IMD history endpoint, separately from all Open-Meteo forecasts.",
                 prediction_observation(result.predictions), "The solid line is the historical gridded target; dashed points are experimental predictions after its endpoint. Persistence repeats the latest maximum. These dates may already be in the past.", source=sources(frame))
-    st.dataframe(result.predictions, hide_index=True, width="stretch")
+    st.dataframe(forecast_table(frame, result.predictions), hide_index=True, width="stretch")
     st.caption("Validation selects tree depth; chronological test results compare MAE/RMSE (°C) with persistence. Boundary-crossing labels are purged. Production refitting follows held-out scoring.")
     evaluation_story(result)
     evaluation = evaluation_chart(result.test_predictions)

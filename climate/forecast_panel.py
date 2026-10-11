@@ -10,7 +10,7 @@ from climate.locations import CITIES
 from climate.model import train_and_predict
 from climate.weather import local_today
 from climate.presentation import chart_story, model_intro, evaluation_story
-from climate.storytelling import prediction_observation, baseline_comparison, sources
+from climate.storytelling import prediction_observation, baseline_comparison, sources, forecast_table
 
 LOGGER = logging.getLogger(__name__)
 cached_model = st.cache_resource(ttl=21600, max_entries=8, show_spinner=False)(train_and_predict)
@@ -39,7 +39,7 @@ def forecast_panel(frame: pd.DataFrame):
         chart_story(shown, "Recent history provides context for the next three model prediction dates. The dotted baseline repeats the latest daily maximum.",
                     prediction_observation(result.predictions),
                     "Solid values are historical inputs. Dashed estimates are local Random Forest outputs; the dotted line is persistence. Prediction dates follow the history endpoint, so stale history produces historical experiments rather than upcoming forecasts.", source=sources(frame))
-        st.dataframe(result.predictions[["date", "horizon", "prediction", "baseline"]],
+        st.dataframe(forecast_table(frame, result.predictions),
                      hide_index=True, width="stretch")
         evaluation_story(result)
         st.caption("Test targets are Open-Meteo reanalysis/model estimates, not independent station measurements.")

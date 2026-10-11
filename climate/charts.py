@@ -64,9 +64,17 @@ def prediction_chart(history: pd.DataFrame, predictions: pd.DataFrame) -> go.Fig
     recent = history.tail(21)
     fig.add_scatter(x=recent.date, y=recent.tmax, name="Historical model estimates", line=dict(color=COLORS[0]))
     fig.add_scatter(x=predictions.date, y=predictions.prediction, name="Local Random Forest prediction",
-                    mode="lines+markers", line=dict(color=COLORS[2], dash="dash"))
+                    mode="lines+markers", marker=dict(symbol="diamond", size=9), line=dict(color=COLORS[2], width=2, dash="dash"))
     fig.add_scatter(x=predictions.date, y=predictions.baseline, name="Persistence baseline",
-                    mode="lines+markers", line=dict(color="#9aa1a9", dash="dot"))
+                    mode="lines+markers", marker=dict(symbol="circle-open", size=9), line=dict(color="#747b84", width=2, dash="dot"))
+    origin = history.date.max()
+    if pd.notna(origin) and not predictions.empty:
+        fig.add_shape(type="line", x0=origin, x1=origin, xref="x", y0=0, y1=1,
+                      yref="paper", line=dict(color="#68717d", width=1.5, dash="dash"))
+        fig.add_annotation(x=origin, xref="x", y=1, yref="paper", text=f"History ends {origin:%d %b %Y}",
+                           showarrow=False, xanchor="right", yanchor="bottom", font=dict(size=10))
+        fig.add_vrect(x0=origin + pd.Timedelta(hours=12), x1=predictions.date.max() + pd.Timedelta(hours=12),
+                      fillcolor="#edf2f2", opacity=.6, line_width=0, layer="below")
     return finish(fig, "Predicted daily maximum for three dates")
 
 
