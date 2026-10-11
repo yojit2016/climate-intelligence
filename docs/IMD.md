@@ -157,6 +157,24 @@ India-only national average is applied. City markers show locations only.
 Color limits use the selected dataset's full range for consistent date
 comparisons. No spatial interpolation is added by the plot.
 
+Select the grid product date once above the four primary sections. Overview's
+valid-cell count, minimum/maximum and hottest coordinate refer to that selected
+date, while whole-file cell-day counts are separately labeled. Historical
+Analysis adds the top five available cells, retaining original coordinates and
+product dates. Map hover includes the date, latitude, longitude and Tmax.
+
+The optional **Compare two IMD dates** expander uses the selected product date
+as Date A and a second date from the same imported dataset as Date B. Temperature
+maps retain identical dataset-wide color limits. Differences are B minus A at
+exact coordinate matches; a missing value on either date leaves the difference
+missing. The difference scale is symmetric around zero, with increased Tmax red
+and decreased Tmax blue. Findings report actual largest positive/negative
+differences, including their coordinates, and handle no increases, no decreases
+and no joint coverage explicitly. The CSV retains both dates and original values.
+Neither this operation nor hotspot rankings changes spatial resolution or
+converts grids into station readings. Two-date differences do not establish a
+long-term climate trend.
+
 For analytics, select one version per historical year and an exact 1° grid
 coordinate. City names help locate a nearby cell, but the cell's coordinates
 are always displayed. **Nearest available to location** uses great-circle distance

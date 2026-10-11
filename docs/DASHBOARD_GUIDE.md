@@ -13,11 +13,54 @@ processing, caches and model inputs stay separate.
 | ML Forecasting | What does our model predict, and how well did it perform? | Prediction dates, simple baseline, held-out errors and explicit historical-experiment labels |
 | Data Processing | Where did the data come from, and what changed? | Actual quality counts, source interpretation, preprocessing, detailed reports, imports and exports |
 
+The same four primary tabs serve both workspaces; there are no nested tab bars.
 Use **Explore history** to switch Open-Meteo historical views. Optional threshold,
-smoothing and comparison controls are in the sidebar. The IMD map and cell
-controls live in Historical Analysis; optional cell modeling lives in ML
-Forecasting. When an IMD map uses a recent daily import, historical cell modeling
+smoothing and comparison controls are in the sidebar. The IMD map product date
+is selected once above the primary tabs, so Overview and Historical Analysis
+describe the same date. Cell controls live in Historical Analysis; optional cell
+modeling lives in ML Forecasting. When an IMD map uses a recent daily import, historical cell modeling
 still requires a separately selected annual 1° dataset.
+
+## A short project demonstration
+
+1. In Open-Meteo **Overview**, explain the current modeled timestamp and most
+   recent available historical daily maximum. **Key Findings** identifies the
+   selected period's actual highest maximum and date. A recent available reading
+   may precede the requested history endpoint when data is missing.
+2. Switch to IMD and select a product date above the tabs. Overview reports that
+   date's valid-cell count, lowest/highest daily maximum and hottest coordinate.
+   Whole-file cell-day counts are separately labeled; neither is a station count.
+3. Open **Historical Analysis** for the enlarged map and **Hottest Locations**
+   table. Hover shows product date, coordinates and maximum in °C. Grey/blank
+   cells represent missing data. Rankings exclude missing cells and break ties
+   by increasing latitude, then longitude; coordinates are not exact cities.
+4. Expand **Compare two IMD dates** and enable comparison. The shared selected
+   product date is Date A; choose Date B inside the expander. Two maps use the
+   same dataset-wide temperature scale. The difference map shows **B minus A**
+   on cells valid on both dates, with a symmetric, zero-centered scale. Findings
+   identify the largest increase/decrease or explicitly state that none occurred.
+   Identical dates produce zero differences at available cells. If no cell is
+   valid on both dates, no difference map is drawn. Export retains both original
+   values, dates, coordinates, missing values and source. This is a comparison
+   of daily maxima, not a measured long-term climate-change claim.
+5. In **ML Forecasting**, point out the history endpoint boundary, shaded
+   prediction-date region, dashed diamond Random Forest markers and dotted open
+   circle persistence markers. The table includes each forecast date, number of
+   days after the endpoint, both estimates and the historical input endpoint.
+   IMD remains a historical experiment even if its prediction dates lie after
+   the file's endpoint.
+6. Explain **Model Performance Summary** horizon by horizon. It reports test MAE
+   for both methods and **RF minus persistence**: negative means improvement,
+   positive means Random Forest performed worse, and zero means a tie. RMSE and
+   complete metrics remain available in expanders; no accuracy percentage or
+   uncertainty interval is invented.
+7. Finish in **Data Processing**: follow acquisition → validation → cleaning →
+   aggregation → analytics → visualization. The compact before/after table uses
+   actual record and missing-value counts. Point products arrive as daily
+   aggregates; monthly/seasonal grouping is performed for analytics. IMD grid
+   decoding preserves the complete cell-day layout without interpolation.
+   Invalid-row/duplicate counts and smoothing state remain visible. Full reports,
+   source interpretation, hashes and file specifications are in **Advanced Details**.
 
 ## Reading the charts
 

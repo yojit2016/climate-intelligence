@@ -69,6 +69,13 @@ and an optional **How to read this chart** guide. Technical methodology remains
 available in expanders. The current conditions section includes a separate
 expandable provider forecast. Dates use Asia/Kolkata. See the
 [dashboard reading guide](docs/DASHBOARD_GUIDE.md) for interpretation and limits.
+
+For a demonstration, select an IMD product date above the tabs, inspect its
+**Key Findings** and **Hottest Locations**, then enable **Compare two IMD dates**
+in Historical Analysis. Difference maps use only cells valid on both dates and
+show B minus A with a zero-centered scale. ML charts mark the input endpoint;
+the performance summary shows test MAE changes for each horizon. Data Processing
+compares actual before/after counts, with technical metadata in Advanced Details.
 Requests are limited to ten years each to bound download and training costs.
 
 **Refresh weather data** immediately bypasses the on-disk caches for current
