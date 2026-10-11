@@ -10,6 +10,7 @@ from uuid import uuid4
 import pandas as pd
 
 from climate.imd_format import IMDFormatError
+from climate.imd_analysis import grid_statistics, nearest_available
 from climate.imd_parser import ParsedGrid
 
 LOGGER = logging.getLogger(__name__)
@@ -89,3 +90,18 @@ class IMDStore:
         cell["tmin"] = float("nan")
         cell["tmean"] = float("nan")
         return cell.reset_index(drop=True)
+
+    def nearest_historical_cell(self, identities: list[str], latitude: float, longitude: float):
+        catalog = {entry["id"]: entry for entry in self.catalog()}
+        if not identities or len(identities) != len(set(identities)):
+            raise IMDFormatError("Select distinct annual historical datasets for analysis.")
+        parts = []
+        for identity in identities:
+            if identity not in catalog or catalog[identity]["grid"]["product"] != "historical":
+                raise IMDFormatError("Nearest historical cell requires annual 1° datasets only.")
+            parts.append(pd.read_parquet(self.parquet_path(identity), columns=[
+                "date", "latitude", "longitude", "maximum_temperature_c"]))
+        return nearest_available(pd.concat(parts, ignore_index=True), latitude, longitude)
+
+    def statistics(self, identity: str) -> dict[str, pd.DataFrame]:
+        return grid_statistics(pd.read_parquet(self.parquet_path(identity)))
