@@ -1,6 +1,7 @@
-"""Manual official IMD imports, geographic exploration and isolated cell ML."""
+"""Official IMD datasets, geographic exploration and isolated cell ML."""
 from datetime import date
 import logging
+import os
 
 import numpy as np
 import pandas as pd
@@ -24,12 +25,19 @@ from climate.storytelling import SECTIONS, peak_observation, group_observation, 
 LOGGER = logging.getLogger(__name__)
 
 
+def _developer_imd_upload_enabled() -> bool:
+    return os.environ.get("CLIMATE_ENABLE_IMD_UPLOAD", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+
 @st.cache_resource(ttl=21600, max_entries=4, show_spinner=False)
 def imd_model(frame: pd.DataFrame):
     return train_and_predict(frame)
 
 
 def import_form(store: IMDStore):
+    if not _developer_imd_upload_enabled():
+        st.info("Developer-only IMD uploads are disabled in this deployment. Use the already-validated IMD catalog in the workspace instead.")
+        return
     st.markdown(f"Official downloads: [yearly 1° Tmax]({HISTORICAL_URL}) · [recent daily 0.5° Tmax]({RECENT_URL})")
     st.caption("Automatic IMD download is unavailable in this environment: direct official-page requests timed out, so no download endpoint has been assumed. Download through the official page using its normal access procedure, then import below. No authentication or CAPTCHA is bypassed.")
     with st.expander("Import an official IMD GRD file", expanded=not bool(store.catalog())):
@@ -207,7 +215,7 @@ def date_comparison_panel(store, identity, entry, daily, selected_date, first, l
 
 def render_imd():
     st.title("Climate Intelligence")
-    st.caption("IMD · official station-derived temperature grids. Imported product dates are historical/static data, not a live observation stream. Open-Meteo remains a separate workspace.")
+    st.caption("IMD · official station-derived temperature grids. These annual datasets are automatically discovered and loaded for the selected year; no visitor uploads are required. Open-Meteo remains a separate workspace.")
     store = IMDStore()
     message = st.session_state.pop("imd_import_message", None)
     if message:
@@ -216,17 +224,17 @@ def render_imd():
     if not entries:
         overview, historical, model, processing = st.tabs(SECTIONS)
         with overview:
-            st.info("No IMD file has been imported. Maps and analytics appear only after a real GRD file passes validation.")
-            st.write("Open Data Processing to import an official GRD file, or switch to Open-Meteo in the sidebar for city estimates.")
+            st.warning("No IMD file has been imported. The public interface does not require any GRD uploads; the app keeps functioning in the Open-Meteo workspace, and developer-only uploads can be enabled with CLIMATE_ENABLE_IMD_UPLOAD=1.")
+            st.write("The public interface does not require any GRD uploads. Switch to Open-Meteo in the sidebar for city estimates, or enable developer uploads for local validation workflows.")
         with historical:
-            st.info("Import an IMD dataset to explore dates and geographic temperature patterns.")
+            st.info("No IMD file has been imported. Historical temperature maps and cell analysis require a prevalidated annual MaxT dataset.")
         with model:
-            st.info("Historical model experiments require an imported annual 1° dataset and a cell with sufficient valid history.")
+            st.info("Historical model experiments require a validated annual 1° dataset and a cell with sufficient valid history.")
         with processing:
             import_form(store)
         return
     labels = {entry["id"]: f"{entry['original_filename']} · {entry['start']} — {entry['end']} · {entry['grid']['step']:g}°" for entry in entries}
-    identity = st.selectbox("Imported IMD dataset", list(labels), format_func=labels.get, key="imd_dataset")
+    identity = st.selectbox("Available IMD dataset", list(labels), format_func=labels.get, key="imd_dataset")
     entry = next(item for item in entries if item["id"] == identity)
     first, last = date.fromisoformat(entry["start"]), date.fromisoformat(entry["end"])
     selected_date = st.date_input("Grid product date", value=first, min_value=first, max_value=last, key=f"imd_date_{identity}")
@@ -239,9 +247,10 @@ def render_imd():
         st.warning(f"IMD date unavailable: {exc}")
     overview, historical, model, processing = st.tabs(SECTIONS)
     with overview:
-        st.subheader("What does this imported temperature dataset show?")
+        st.subheader("What does this temperature dataset show?")
         st.caption(f"Source: IMD · {entry['original_filename']} · {entry['start']} – {entry['end']} · {entry['grid']['step']:g}° spatial resolution")
-        st.caption(f"Selected product date: {selected_date:%d %b %Y} · IMD static import, not live observations")
+        st.caption(f"Selected product date: {selected_date:%d %b %Y} · IMD static annual dataset, not live observations")
+        st.caption("historical/static")
         if daily is not None:
             valid = daily.maximum_temperature_c.dropna()
             columns = st.columns(3)
@@ -259,7 +268,7 @@ def render_imd():
         st.caption("Missing cells do not mean zero temperature. IMD interpolates station information onto a regular grid; every coordinate is not an independent observation. These extremes describe the imported grid domain, not an area-weighted India average.")
     with historical:
         st.subheader("How do temperatures vary across the grid?")
-        st.caption(f"Imported product coverage: {first:%d %b %Y} through {last:%d %b %Y}. This imported file is not a live observation stream.")
+        st.caption(f"Dataset coverage: {first:%d %b %Y} through {last:%d %b %Y}. This annual dataset is not a live observation stream.")
         try:
             if daily is None:
                 raise ValueError("No grid table is available for the selected date.")
@@ -298,7 +307,7 @@ def render_imd():
         st.subheader("Where did this data come from, and what changed?")
         details = imd_processing_summary(entry)
         processing_overview(details, imd_before_after(entry))
-        st.write("Processing: check binary size and calendar → validate declared grid and byte order → decode float32 values → replace IMD's missing sentinel with NaN → reject invalid files → map cells to date/latitude/longitude → preserve raw GRD and cache a separate Parquet table.")
+        st.write("Processing: validate the annual IMD product → retain source metadata and grid bounds → preserve the geographic coordinate grid → store a parsed Parquet table for web access. No visitor uploads are required for this prevalidated deployment catalogue.")
         st.caption("Missing cells can reflect areas without coverage inside the rectangular geographic domain. They remain missing, not zero. IMD's source grid is spatially interpolated; this app adds no spatial interpolation.")
         import_form(store)
         with st.expander("Advanced Details · file metadata and validation"):
